@@ -1,83 +1,180 @@
 const express = require("express");
 const path = require("path");
 const Database = require("better-sqlite3");
+const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 
 const app = express();
-// Change PORT only if 3000 is busy on your computer.
 const PORT = Number(process.env.PORT) || 3000;
-// Change this secret before deploying to the internet so tokens stay private.
 const SECRET = process.env.JWT_SECRET || "points-game-secret";
-const db = new Database(path.join(__dirname, "database.db"));
-db.pragma("journal_mode = WAL");
+const DATABASE_PATH =
+  process.env.DATABASE_PATH || path.join(__dirname, "database.db");
+const DATABASE_URL = process.env.DATABASE_URL || "";
+const IS_POSTGRES = Boolean(DATABASE_URL);
+
+const sqliteDb = IS_POSTGRES ? null : new Database(DATABASE_PATH);
+const postgresPool = IS_POSTGRES
+  ? new Pool({
+      connectionString: DATABASE_URL,
+      ssl:
+        process.env.DATABASE_SSL === "false"
+          ? false
+          : { rejectUnauthorized: false },
+    })
+  : null;
+
+if (sqliteDb) {
+  sqliteDb.pragma("journal_mode = WAL");
+}
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(__dirname));
 
-function run(sql, params = []) {
-  const info = db.prepare(sql).run(params);
+function toPostgresSql(sql) {
+  let index = 0;
+  return sql.replace(/\?/g, () => `$${++index}`);
+}
+
+async function run(sql, params = []) {
+  if (IS_POSTGRES) {
+    const result = await postgresPool.query(toPostgresSql(sql), params);
+    return {
+      lastID: null,
+      changes: result.rowCount || 0,
+    };
+  }
+
+  const info = sqliteDb.prepare(sql).run(params);
   return {
     lastID: Number(info.lastInsertRowid),
     changes: info.changes,
   };
 }
 
-function get(sql, params = []) {
-  return db.prepare(sql).get(params);
+async function get(sql, params = []) {
+  if (IS_POSTGRES) {
+    const result = await postgresPool.query(toPostgresSql(sql), params);
+    return result.rows[0];
+  }
+
+  return sqliteDb.prepare(sql).get(params);
 }
 
-function all(sql, params = []) {
-  return db.prepare(sql).all(params);
+async function all(sql, params = []) {
+  if (IS_POSTGRES) {
+    const result = await postgresPool.query(toPostgresSql(sql), params);
+    return result.rows;
+  }
+
+  return sqliteDb.prepare(sql).all(params);
 }
 
-function ensureColumn(tableName, columnName, definition) {
-  const columns = all(`PRAGMA table_info(${tableName})`);
+async function insertAndGetId(sql, params = []) {
+  if (IS_POSTGRES) {
+    const result = await postgresPool.query(
+      `${toPostgresSql(sql)} RETURNING id`,
+      params
+    );
+    return Number(result.rows[0].id);
+  }
+
+  const info = sqliteDb.prepare(sql).run(params);
+  return Number(info.lastInsertRowid);
+}
+
+async function ensureColumn(tableName, columnName, definition) {
+  if (IS_POSTGRES) {
+    const column = await get(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = ?
+         AND column_name = ?`,
+      [tableName, columnName]
+    );
+
+    if (!column) {
+      await run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+    }
+
+    return;
+  }
+
+  const columns = await all(`PRAGMA table_info(${tableName})`);
   const exists = columns.some((column) => column.name === columnName);
 
   if (!exists) {
-    run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+    await run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
   }
 }
 
 async function seedDatabase() {
-  // Step 1: Create the tables if this is the first time the app has run.
-  run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'player',
-    points INTEGER NOT NULL DEFAULT 0
-  )`);
+  if (IS_POSTGRES) {
+    await run(`CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'player',
+      points INTEGER NOT NULL DEFAULT 0
+    )`);
 
-  run(`CREATE TABLE IF NOT EXISTS shop (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    cost INTEGER NOT NULL,
-    category TEXT NOT NULL DEFAULT 'reward'
-  )`);
+    await run(`CREATE TABLE IF NOT EXISTS shop (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      cost INTEGER NOT NULL,
+      category TEXT NOT NULL DEFAULT 'reward'
+    )`);
 
-  run(`CREATE TABLE IF NOT EXISTS redemptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL,
-    item TEXT NOT NULL,
-    cost INTEGER NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`);
+    await run(`CREATE TABLE IF NOT EXISTS redemptions (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL,
+      item TEXT NOT NULL,
+      cost INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+  } else {
+    await run(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'player',
+      points INTEGER NOT NULL DEFAULT 0
+    )`);
 
-  ensureColumn("users", "points", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn("shop", "category", "TEXT NOT NULL DEFAULT 'reward'");
-  ensureColumn("redemptions", "cost", "INTEGER NOT NULL DEFAULT 0");
-  ensureColumn("redemptions", "created_at", "TEXT");
-  run(
+    await run(`CREATE TABLE IF NOT EXISTS shop (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      cost INTEGER NOT NULL,
+      category TEXT NOT NULL DEFAULT 'reward'
+    )`);
+
+    await run(`CREATE TABLE IF NOT EXISTS redemptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      item TEXT NOT NULL,
+      cost INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+  }
+
+  await ensureColumn("users", "points", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn("shop", "category", "TEXT NOT NULL DEFAULT 'reward'");
+  await ensureColumn("redemptions", "cost", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(
+    "redemptions",
+    "created_at",
+    IS_POSTGRES ? "TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP" : "TEXT"
+  );
+
+  await run(
     "UPDATE redemptions SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP)"
   );
 
-  // Remove the fake test accounts created during setup/debugging.
-  run(
+  await run(
     `DELETE FROM users
      WHERE role = 'player'
        AND (
@@ -90,37 +187,33 @@ async function seedDatabase() {
        )`
   );
 
-  // Step 2: Force the main admin account to use the login you requested.
-  // If you want to change the default admin later, edit these two values.
   const adminHash = await bcrypt.hash("gamer@00", 10);
-  const targetAdmin = get(
+  const targetAdmin = await get(
     "SELECT id FROM users WHERE username = ?",
     ["admin1234"]
   );
-  const legacyAdmin = get(
-    "SELECT id FROM users WHERE username = ?",
-    ["admin"]
-  );
+  const legacyAdmin = await get("SELECT id FROM users WHERE username = ?", [
+    "admin",
+  ]);
 
   if (targetAdmin) {
-    run(
+    await run(
       "UPDATE users SET password = ?, role = 'admin' WHERE id = ?",
       [adminHash, targetAdmin.id]
     );
   } else if (legacyAdmin) {
-    run(
+    await run(
       "UPDATE users SET username = ?, password = ?, role = 'admin' WHERE id = ?",
       ["admin1234", adminHash, legacyAdmin.id]
     );
   } else {
-    run(
+    await run(
       "INSERT INTO users (username, password, role, points) VALUES (?, ?, 'admin', 0)",
       ["admin1234", adminHash]
     );
   }
 
-  // Replace the default shop with the rewards you asked for.
-  run("DELETE FROM shop");
+  await run("DELETE FROM shop");
   const items = [
     ["Plus 1 Goal", 100, "reward"],
     ["Free Kick", 50, "reward"],
@@ -132,7 +225,7 @@ async function seedDatabase() {
   ];
 
   for (const [name, cost, category] of items) {
-    run("INSERT INTO shop (name, cost, category) VALUES (?, ?, ?)", [
+    await run("INSERT INTO shop (name, cost, category) VALUES (?, ?, ?)", [
       name,
       cost,
       category,
@@ -166,7 +259,7 @@ async function registerUser(username, password) {
     throw error;
   }
 
-  const existing = get("SELECT id FROM users WHERE username = ?", [
+  const existing = await get("SELECT id FROM users WHERE username = ?", [
     cleanUsername,
   ]);
 
@@ -177,13 +270,13 @@ async function registerUser(username, password) {
   }
 
   const hash = await bcrypt.hash(cleanPassword, 10);
-  const result = run(
+  const userId = await insertAndGetId(
     "INSERT INTO users (username, password, role, points) VALUES (?, ?, 'player', 0)",
     [cleanUsername, hash]
   );
-  const user = get(
+  const user = await get(
     "SELECT id, username, role, points FROM users WHERE id = ?",
-    [result.lastID]
+    [userId]
   );
 
   return {
@@ -195,7 +288,7 @@ async function registerUser(username, password) {
 async function loginUser(username, password) {
   const cleanUsername = String(username || "").trim();
   const cleanPassword = String(password || "");
-  const user = get("SELECT * FROM users WHERE username = ?", [cleanUsername]);
+  const user = await get("SELECT * FROM users WHERE username = ?", [cleanUsername]);
 
   if (!user) {
     const error = new Error("Invalid credentials");
@@ -213,16 +306,15 @@ async function loginUser(username, password) {
   return {
     token: createToken(user),
     user: {
-      id: user.id,
+      id: Number(user.id),
       username: user.username,
       role: user.role,
-      points: user.points,
+      points: Number(user.points),
     },
   };
 }
 
 async function auth(req, res, next) {
-  // Every protected route uses this to make sure the user is logged in.
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : header;
 
@@ -233,7 +325,7 @@ async function auth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, SECRET);
-    const user = get(
+    const user = await get(
       "SELECT id, username, role, points FROM users WHERE id = ?",
       [decoded.id]
     );
@@ -243,7 +335,12 @@ async function auth(req, res, next) {
       return;
     }
 
-    req.user = user;
+    req.user = {
+      id: Number(user.id),
+      username: user.username,
+      role: user.role,
+      points: Number(user.points),
+    };
     next();
   } catch (error) {
     res.status(401).json({ success: false, message: "Invalid token" });
@@ -251,7 +348,6 @@ async function auth(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  // Use this on routes that only admins should be allowed to use.
   if (req.user.role !== "admin") {
     res.status(403).json({ success: false, message: "Admin access required" });
     return;
@@ -273,21 +369,13 @@ app.get("/shop.html", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({ success: true });
+  res.json({ success: true, database: IS_POSTGRES ? "postgres" : "sqlite" });
 });
 
-// Players create their own accounts here. New accounts always start at 0 points.
 app.post("/register", async (req, res) => {
   try {
-    const username = String(req.body.username || "").trim();
-    const password = String(req.body.password || "");
-    const { token, user } = await registerUser(username, password);
-
-    res.json({
-      success: true,
-      token,
-      user,
-    });
+    const { token, user } = await registerUser(req.body.username, req.body.password);
+    res.json({ success: true, token, user });
   } catch (error) {
     res
       .status(error.status || 500)
@@ -297,15 +385,8 @@ app.post("/register", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   try {
-    const username = String(req.body.username || "").trim();
-    const password = String(req.body.password || "");
-    const { token, user } = await loginUser(username, password);
-
-    res.json({
-      success: true,
-      token,
-      user,
-    });
+    const { token, user } = await loginUser(req.body.username, req.body.password);
+    res.json({ success: true, token, user });
   } catch (error) {
     res
       .status(error.status || 500)
@@ -313,7 +394,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// These form routes make the first page work even if frontend fetch code fails.
 app.post("/auth/register", async (req, res) => {
   try {
     const { token } = await registerUser(req.body.username, req.body.password);
@@ -336,13 +416,19 @@ app.get("/me", auth, async (req, res) => {
   res.json({ success: true, user: req.user });
 });
 
-// Admin dashboard uses this to load every user and their current points.
 app.get("/users", auth, adminOnly, async (req, res) => {
   try {
-    const users = all(
+    const users = await all(
       "SELECT id, username, role, points FROM users ORDER BY role DESC, username ASC"
     );
-    res.json({ success: true, users });
+    res.json({
+      success: true,
+      users: users.map((user) => ({
+        ...user,
+        id: Number(user.id),
+        points: Number(user.points),
+      })),
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: "Could not load users" });
   }
@@ -350,20 +436,25 @@ app.get("/users", auth, adminOnly, async (req, res) => {
 
 app.get("/leaderboard", auth, async (req, res) => {
   try {
-    const leaderboard = all(
+    const leaderboard = await all(
       `SELECT username, points
        FROM users
        WHERE role = 'player'
        ORDER BY points DESC, username ASC
        LIMIT 10`
     );
-    res.json({ success: true, leaderboard });
+    res.json({
+      success: true,
+      leaderboard: leaderboard.map((entry) => ({
+        ...entry,
+        points: Number(entry.points),
+      })),
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: "Could not load leaderboard" });
   }
 });
 
-// Admin uses this route to add or remove points from a player account.
 app.post("/points", auth, adminOnly, async (req, res) => {
   const username = String(req.body.username || "").trim();
   const amount = Number(req.body.amount);
@@ -376,7 +467,7 @@ app.post("/points", auth, adminOnly, async (req, res) => {
   }
 
   try {
-    const target = get(
+    const target = await get(
       "SELECT id, username, role, points FROM users WHERE username = ?",
       [username]
     );
@@ -386,32 +477,44 @@ app.post("/points", auth, adminOnly, async (req, res) => {
       return;
     }
 
-    const nextPoints = target.points + amount;
-    run("UPDATE users SET points = ? WHERE id = ?", [nextPoints, target.id]);
+    const nextPoints = Number(target.points) + amount;
+    await run("UPDATE users SET points = ? WHERE id = ?", [
+      nextPoints,
+      target.id,
+    ]);
 
     res.json({
       success: true,
       message: `${amount >= 0 ? "Added" : "Removed"} ${Math.abs(amount)} points`,
-      user: { ...target, points: nextPoints },
+      user: {
+        ...target,
+        id: Number(target.id),
+        points: nextPoints,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: "Could not update points" });
   }
 });
 
-// The separate shop page reads the available rewards from this route.
 app.get("/shop", auth, async (req, res) => {
   try {
-    const items = all(
+    const items = await all(
       "SELECT id, name, cost, category FROM shop ORDER BY category ASC, cost ASC, name ASC"
     );
-    res.json({ success: true, items });
+    res.json({
+      success: true,
+      items: items.map((item) => ({
+        ...item,
+        id: Number(item.id),
+        cost: Number(item.cost),
+      })),
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: "Could not load shop" });
   }
 });
 
-// Players spend points here when they click Redeem in the shop page.
 app.post("/redeem", auth, async (req, res) => {
   const itemId = Number(req.body.itemId);
 
@@ -421,29 +524,33 @@ app.post("/redeem", auth, async (req, res) => {
   }
 
   try {
-    const item = get("SELECT id, name, cost FROM shop WHERE id = ?", [itemId]);
+    const item = await get("SELECT id, name, cost FROM shop WHERE id = ?", [itemId]);
     if (!item) {
       res.status(404).json({ success: false, message: "Item not found" });
       return;
     }
 
-    const user = get(
+    const user = await get(
       "SELECT id, username, role, points FROM users WHERE id = ?",
       [req.user.id]
     );
 
-    if (user.points < item.cost) {
+    if (Number(user.points) < Number(item.cost)) {
       res.status(400).json({
         success: false,
         message: "Not enough points for this item",
-        user,
+        user: {
+          ...user,
+          id: Number(user.id),
+          points: Number(user.points),
+        },
       });
       return;
     }
 
-    const updatedPoints = user.points - item.cost;
-    run("UPDATE users SET points = ? WHERE id = ?", [updatedPoints, user.id]);
-    run(
+    const updatedPoints = Number(user.points) - Number(item.cost);
+    await run("UPDATE users SET points = ? WHERE id = ?", [updatedPoints, user.id]);
+    await run(
       "INSERT INTO redemptions (username, item, cost, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
       [user.username, item.name, item.cost]
     );
@@ -451,31 +558,43 @@ app.post("/redeem", auth, async (req, res) => {
     res.json({
       success: true,
       message: `Redeemed ${item.name}`,
-      user: { ...user, points: updatedPoints },
+      user: {
+        ...user,
+        id: Number(user.id),
+        points: updatedPoints,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: "Could not redeem item" });
   }
 });
 
-// Admin dashboard uses this log to show what players have redeemed.
 app.get("/redemptions", auth, adminOnly, async (req, res) => {
   try {
-    const logs = all(
+    const logs = await all(
       "SELECT id, username, item, cost, created_at FROM redemptions ORDER BY id DESC"
     );
-    res.json({ success: true, logs });
+    res.json({
+      success: true,
+      logs: logs.map((log) => ({
+        ...log,
+        id: Number(log.id),
+        cost: Number(log.cost),
+      })),
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, message: "Could not load redemptions" });
+    res.status(500).json({ success: false, message: "Could not load redemptions" });
   }
 });
 
 seedDatabase()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(
+        `Server running on http://localhost:${PORT} using ${
+          IS_POSTGRES ? "Postgres" : "SQLite"
+        }`
+      );
     });
   })
   .catch((error) => {
