@@ -2,24 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      http-equiv="Cache-Control"
-      content="no-cache, no-store, must-revalidate"
-    />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Player Rewards Shop</title>
-    <link rel="stylesheet" href="./styles.css?v=3" />
-    <script src="./app.js?v=5" defer></script>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
   </head>
   <body data-page="shop">
     <div class="page">
-      <!-- Players redeem rewards on this page. -->
+      <!-- Players redeem their rewards on this page. -->
       <section class="hero">
         <span class="eyebrow">Player Shop</span>
         <h1>Spend earned points on rewards.</h1>
-        <p class="muted">If you are an admin, go back to the home page instead.</p>
+        <p class="muted">
+          If you are an admin, go back to the home page instead.
+        </p>
         <div class="pill-row">
           <div class="pill" id="playerName">Player</div>
           <div class="pill" id="playerPoints">0 points</div>
@@ -33,7 +29,7 @@
             <p class="muted">Redeem an item when you have enough points.</p>
           </div>
           <div class="actions">
-            <a class="button-link ghost" href="./home.html">Back to Home</a>
+            <a class="button-link ghost" href="/home.html">Back to Home</a>
             <button class="ghost" id="logoutButton" type="button">Logout</button>
           </div>
         </div>

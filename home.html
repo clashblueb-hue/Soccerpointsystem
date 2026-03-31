@@ -2,20 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      http-equiv="Cache-Control"
-      content="no-cache, no-store, must-revalidate"
-    />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Player Rewards Home</title>
-    <link rel="stylesheet" href="./styles.css?v=3" />
-    <script src="./app.js?v=5" defer></script>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
   </head>
   <body data-page="home">
     <div class="page">
-      <!-- This is the home page after login. -->
+      <!-- This is the main page after login for both players and admins. -->
       <section class="hero">
         <span class="eyebrow">Rewards Home</span>
         <h1 id="heroTitle">Welcome</h1>
@@ -26,7 +20,9 @@
         <div class="panel-header">
           <div>
             <h2 id="welcomeTitle">Account</h2>
-            <p class="muted">This page changes based on whether the user is a player or admin.</p>
+            <p class="muted">
+              This page changes based on whether the user is a player or admin.
+            </p>
           </div>
           <div class="actions">
             <button class="ghost" id="shopButton" type="button">Open Shop</button>

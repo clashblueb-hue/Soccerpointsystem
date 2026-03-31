@@ -1,47 +1,5 @@
-// If you open the HTML files directly, API calls still go to the local Node server.
-const API_BASE =
-  window.location.protocol === "file:"
-    ? "http://localhost:3000"
-    : window.location.origin;
-
-function getPageUrl(pageName) {
-  if (window.location.protocol === "file:") {
-    return new URL(pageName, window.location.href).href;
-  }
-
-  return `/${pageName}`;
-}
-
-function goToPage(pageName) {
-  window.location.href = getPageUrl(pageName);
-}
-
-function getToken() {
-  return localStorage.getItem("token") || "";
-}
-
-function setToken(token) {
-  localStorage.setItem("token", token);
-}
-
-function clearToken() {
-  localStorage.removeItem("token");
-}
-
-function syncTokenFromHash() {
-  const hash = window.location.hash.startsWith("#")
-    ? window.location.hash.slice(1)
-    : window.location.hash;
-  const params = new URLSearchParams(hash);
-  const tokenFromHash = params.get("token");
-
-  if (!tokenFromHash) {
-    return;
-  }
-
-  setToken(tokenFromHash);
-  history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
-}
+// This file runs on every Cloudflare page.
+// Keep the API calls same-origin so the Worker can manage login cookies for us.
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
@@ -75,25 +33,20 @@ function clearMessage(element) {
 }
 
 async function api(path, options = {}) {
-  const token = getToken();
   const headers = {
     ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
   };
 
-  if (token) {
-    headers.authorization = `Bearer ${token}`;
-  }
-
   let response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    response = await fetch(path, {
+      ...options,
+      headers,
+      credentials: "same-origin",
+    });
   } catch (error) {
-    throw new Error(
-      window.location.protocol === "file:"
-        ? "Cannot reach the app server. Start it with `node server.js`, then refresh this page."
-        : "Cannot reach the server for this site right now."
-    );
+    throw new Error("The site could not reach the server.");
   }
 
   const raw = await response.text();
@@ -119,25 +72,26 @@ async function getCurrentUser() {
   return data.user;
 }
 
+async function logout() {
+  await fetch("/logout", { method: "POST", credentials: "same-origin" });
+  window.location.href = "/index.html";
+}
+
 function initIndexPage() {
   const message = document.getElementById("message");
-  const loginForm = document.getElementById("loginForm");
-  const registerForm = document.getElementById("registerForm");
   const params = new URLSearchParams(window.location.search);
   const error = params.get("error");
-
-  // Keep auth working both on the deployed site and when opening files locally.
-  loginForm.action = `${API_BASE}/auth/login`;
-  registerForm.action = `${API_BASE}/auth/register`;
-
-  if (getToken()) {
-    goToPage("home.html");
-    return;
-  }
 
   if (error) {
     setMessage(message, error, "error");
   }
+
+  // If the user already has a valid cookie, skip the login page.
+  getCurrentUser()
+    .then(() => {
+      window.location.href = "/home.html";
+    })
+    .catch(() => {});
 }
 
 function initHomePage() {
@@ -172,17 +126,15 @@ function initHomePage() {
         "Use the player cards below to add or remove points.";
       playerHome.classList.add("hidden");
       adminHome.classList.remove("hidden");
-      shopButton.classList.remove("hidden");
       return;
     }
 
     heroText.textContent =
-      "You are on the app home page. Open the shop when you want to redeem rewards.";
+      "Open the shop when you want to spend the points you have earned.";
     nextStepText.textContent =
-      "Use the Open Shop button to spend your current points.";
+      "Use the Open Shop button to redeem rewards from your current balance.";
     playerHome.classList.remove("hidden");
     adminHome.classList.add("hidden");
-    shopButton.classList.remove("hidden");
   }
 
   async function adjustPoints(username, amount) {
@@ -269,15 +221,10 @@ function initHomePage() {
             `
           )
           .join("")
-      : `<div class="empty">No players on the leaderboard yet.</div>`;
+      : `<div class="empty">No players are on the leaderboard yet.</div>`;
   }
 
   async function loadPage() {
-    if (!getToken()) {
-      goToPage("index.html");
-      return;
-    }
-
     user = await getCurrentUser();
     renderUserShell();
 
@@ -294,18 +241,23 @@ function initHomePage() {
   }
 
   logoutButton.addEventListener("click", () => {
-    clearToken();
-    goToPage("index.html");
+    logout();
   });
 
   shopButton.addEventListener("click", () => {
-    goToPage("shop.html");
+    if (user && user.role === "admin") {
+      setMessage(message, "Admins manage players from the home page.", "error");
+      return;
+    }
+
+    window.location.href = "/shop.html";
   });
 
   loadPage().catch((error) => {
-    clearToken();
-    setMessage(message, error.message, "error");
-    setTimeout(() => goToPage("index.html"), 1200);
+    setMessage(message, error.message || "Please log in first.", "error");
+    setTimeout(() => {
+      window.location.href = "/index.html";
+    }, 1000);
   });
 }
 
@@ -378,7 +330,7 @@ function initShopPage() {
               <h3>Snacks</h3>
               <p class="muted">Open the menu and choose a snack reward.</p>
             </div>
-            <div class="cost">15+ pts</div>
+            <div class="cost">20+ pts</div>
           </div>
           <details class="snack-details">
             <summary>Choose a snack</summary>
@@ -409,18 +361,14 @@ function initShopPage() {
       : "";
 
     const cards = [...rewardCards, snackCard].filter(Boolean).join("");
-    shopGrid.innerHTML = cards || `<div class="empty">No shop items are available yet.</div>`;
+    shopGrid.innerHTML =
+      cards || `<div class="empty">No shop items are available yet.</div>`;
   }
 
   async function loadPage() {
-    if (!getToken()) {
-      goToPage("index.html");
-      return;
-    }
-
     user = await getCurrentUser();
     if (user.role === "admin") {
-      goToPage("home.html");
+      window.location.href = "/home.html";
       return;
     }
 
@@ -430,19 +378,18 @@ function initShopPage() {
   }
 
   logoutButton.addEventListener("click", () => {
-    clearToken();
-    goToPage("index.html");
+    logout();
   });
 
   loadPage().catch((error) => {
-    clearToken();
-    setMessage(message, error.message, "error");
-    setTimeout(() => goToPage("index.html"), 1200);
+    setMessage(message, error.message || "Please log in first.", "error");
+    setTimeout(() => {
+      window.location.href = "/index.html";
+    }, 1000);
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  syncTokenFromHash();
   const page = document.body.dataset.page;
 
   if (page === "index") {

@@ -301,7 +301,9 @@ button:disabled {
   .row,
   .actions,
   .shop-top,
-  .pill-row {
+  .pill-row,
+  .leaderboard-entry,
+  .snack-option {
     flex-direction: column;
     align-items: flex-start;
   }
