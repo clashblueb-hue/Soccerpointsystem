@@ -202,8 +202,10 @@ function initHomePage() {
                   <div class="points">${entry.points} pts</div>
                 </div>
                 <div class="actions">
+                  <button class="secondary" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), 5)">+5</button>
                   <button class="secondary" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), 10)">+10</button>
                   <button class="secondary" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), 50)">+50</button>
+                  <button class="danger" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), -5)">-5</button>
                   <button class="danger" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), -10)">-10</button>
                 </div>
               </article>
