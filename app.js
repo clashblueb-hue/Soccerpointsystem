@@ -28,6 +28,21 @@ function clearToken() {
   localStorage.removeItem("token");
 }
 
+function syncTokenFromHash() {
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const params = new URLSearchParams(hash);
+  const tokenFromHash = params.get("token");
+
+  if (!tokenFromHash) {
+    return;
+  }
+
+  setToken(tokenFromHash);
+  history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
     const map = {
@@ -427,6 +442,7 @@ function initShopPage() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  syncTokenFromHash();
   const page = document.body.dataset.page;
 
   if (page === "index") {
