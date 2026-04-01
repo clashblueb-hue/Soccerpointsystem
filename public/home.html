@@ -77,8 +77,15 @@
         <div id="leaderboardList" class="user-list"></div>
       </section>
 
-      <section id="adminHome" class="grid dashboard-grid hidden">
-        <div class="panel">
+      <section id="adminHome" class="panel hidden">
+        <div class="admin-tab-bar">
+          <button class="secondary admin-tab is-active" data-admin-tab="players" type="button">Players</button>
+          <button class="ghost admin-tab" data-admin-tab="shop" type="button">Shop</button>
+          <button class="ghost admin-tab" data-admin-tab="wheel" type="button">Wheel</button>
+          <button class="ghost admin-tab" data-admin-tab="purchases" type="button">Purchases</button>
+        </div>
+
+        <div class="admin-tab-panel" data-admin-panel="players">
           <div class="panel-header">
             <div>
               <h2>Players</h2>
@@ -88,7 +95,7 @@
           <div id="userList" class="user-list"></div>
         </div>
 
-        <div class="panel">
+        <div class="admin-tab-panel hidden" data-admin-panel="shop">
           <div class="panel-header">
             <div>
               <h2>Shop Manager</h2>
@@ -121,7 +128,7 @@
           <div id="shopAdminList" class="user-list"></div>
         </div>
 
-        <div class="panel">
+        <div class="admin-tab-panel hidden" data-admin-panel="wheel">
           <div class="panel-header">
             <div>
               <h2>Wheel Manager</h2>
@@ -153,11 +160,11 @@
           </div>
         </div>
 
-        <div class="panel">
+        <div class="admin-tab-panel hidden" data-admin-panel="purchases">
           <div class="panel-header">
             <div>
               <h2>Redemption Log</h2>
-              <p class="muted">This shows what players bought from the shop.</p>
+              <p class="muted">Purchased items are removed after 3 hours unless you save them.</p>
             </div>
           </div>
           <div id="logList" class="log-list"></div>
