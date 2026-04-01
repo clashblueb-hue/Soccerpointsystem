@@ -567,7 +567,8 @@ async function routeRequest(request, env) {
     ]);
     await dbRun(
       env,
-      "INSERT INTO redemptions (username, item, cost) VALUES (?, ?, ?)",
+      `INSERT INTO redemptions (username, item, cost, expires_at, keep_forever)
+       VALUES (?, ?, ?, datetime('now', '+3 hours'), 0)`,
       [freshUser.username, item.name, item.cost]
     );
 
@@ -583,9 +584,18 @@ async function routeRequest(request, env) {
 
   if (route === "/redemptions" && request.method === "GET") {
     await requireAdmin(request, env);
+    await dbRun(
+      env,
+      `DELETE FROM redemptions
+       WHERE keep_forever = 0
+         AND expires_at IS NOT NULL
+         AND expires_at <= CURRENT_TIMESTAMP`
+    );
     const logs = await dbAll(
       env,
-      "SELECT id, username, item, cost, created_at FROM redemptions ORDER BY id DESC"
+      `SELECT id, username, item, cost, created_at, expires_at, keep_forever
+       FROM redemptions
+       ORDER BY id DESC`
     );
     return json({
       success: true,
@@ -595,7 +605,43 @@ async function routeRequest(request, env) {
         item: log.item,
         cost: Number(log.cost),
         created_at: log.created_at,
+        expires_at: log.expires_at,
+        keepForever: Boolean(Number(log.keep_forever)),
       })),
+    });
+  }
+
+  if (route === "/redemptions/preserve" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const body = await request.json();
+    const redemptionId = Number(body.redemptionId);
+
+    if (Number.isNaN(redemptionId)) {
+      return json(
+        { success: false, message: "A valid redemption log is required" },
+        400
+      );
+    }
+
+    const redemption = await dbGet(
+      env,
+      "SELECT id, item FROM redemptions WHERE id = ?",
+      [redemptionId]
+    );
+
+    if (!redemption) {
+      return json({ success: false, message: "Log entry not found" }, 404);
+    }
+
+    await dbRun(
+      env,
+      "UPDATE redemptions SET keep_forever = 1, expires_at = NULL WHERE id = ?",
+      [redemptionId]
+    );
+
+    return json({
+      success: true,
+      message: `Saved ${redemption.item} in the purchase log`,
     });
   }
 
@@ -676,8 +722,27 @@ async function setupDatabase(env) {
       username TEXT NOT NULL,
       item TEXT NOT NULL,
       cost INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT,
+      keep_forever INTEGER NOT NULL DEFAULT 0
     )`
+  );
+
+  await dbRun(
+    env,
+    "ALTER TABLE redemptions ADD COLUMN expires_at TEXT"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    "ALTER TABLE redemptions ADD COLUMN keep_forever INTEGER NOT NULL DEFAULT 0"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    `UPDATE redemptions
+     SET expires_at = datetime(created_at, '+3 hours')
+     WHERE expires_at IS NULL AND keep_forever = 0`
   );
 
   await dbRun(
@@ -1162,4 +1227,3 @@ function json(body, status = 200) {
     },
   });
 }
-
