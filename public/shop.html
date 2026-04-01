@@ -1,1 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Player Rewards Shop</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="shop">
+    <div class="page">
+      <!-- Players redeem their rewards on this page. -->
+      <section class="hero">
+        <span class="eyebrow">Player Shop</span>
+        <h1>Spend earned points on rewards.</h1>
+        <p class="muted">
+          If you are an admin, go back to the home page instead.
+        </p>
+        <div class="pill-row">
+          <div class="pill" id="playerName">Player</div>
+          <div class="pill" id="playerPoints">0 points</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Available Rewards</h2>
+            <p class="muted">Redeem an item when you have enough points.</p>
+          </div>
+          <div class="actions">
+            <a class="button-link ghost" href="/home.html">Back to Home</a>
+            <button class="ghost" id="logoutButton" type="button">Logout</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <article class="stat-card">
+            <div class="muted">Current balance</div>
+            <div class="stat-value" id="pointsValue">0</div>
+          </article>
+          <article class="note-card">
+            <div class="muted">What to do</div>
+            <p>Ask the admin for points, then redeem a reward below.</p>
+          </article>
+        </div>
+
+        <div id="shopGrid" class="shop-grid"></div>
+        <div id="message" class="message"></div>
+      </section>
+    </div>
+  </body>
+</html>
 
