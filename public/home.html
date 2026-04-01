@@ -124,6 +124,38 @@
         <div class="panel">
           <div class="panel-header">
             <div>
+              <h2>Wheel Manager</h2>
+              <p class="muted">Choose the 4 percentage outcomes the daily wheel can land on.</p>
+            </div>
+          </div>
+          <div class="note-card stack">
+            <div class="shop-admin-grid">
+              <label class="stack">
+                <span class="muted">Slot 1</span>
+                <input id="wheel-option-0" type="number" min="-100" max="100" step="1" />
+              </label>
+              <label class="stack">
+                <span class="muted">Slot 2</span>
+                <input id="wheel-option-1" type="number" min="-100" max="100" step="1" />
+              </label>
+              <label class="stack">
+                <span class="muted">Slot 3</span>
+                <input id="wheel-option-2" type="number" min="-100" max="100" step="1" />
+              </label>
+              <label class="stack">
+                <span class="muted">Slot 4</span>
+                <input id="wheel-option-3" type="number" min="-100" max="100" step="1" />
+              </label>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="saveWheelConfigButton" type="button">Save Wheel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
               <h2>Redemption Log</h2>
               <p class="muted">This shows what players bought from the shop.</p>
             </div>
@@ -135,6 +167,4 @@
       <div id="message" class="message"></div>
     </div>
   </body>
-</html>
-
 </html>
