@@ -241,6 +241,10 @@ function initHomePage() {
   const newShopCost = document.getElementById("newShopCost");
   const newShopCategory = document.getElementById("newShopCategory");
   const createShopItemButton = document.getElementById("createShopItemButton");
+  const saveWheelConfigButton = document.getElementById("saveWheelConfigButton");
+  const wheelOptionInputs = [0, 1, 2, 3].map((index) =>
+    document.getElementById(`wheel-option-${index}`)
+  );
 
   let user = null;
 
@@ -392,6 +396,26 @@ function initHomePage() {
 
   window.deleteShopItem = deleteShopItem;
 
+  async function saveWheelConfig() {
+    clearMessage(message);
+
+    try {
+      const data = await api("/api/wheel-config", {
+        method: "POST",
+        body: JSON.stringify({
+          options: wheelOptionInputs.map((input) => Number(input.value)),
+        }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.saveWheelConfig = saveWheelConfig;
+
   function renderAdminLists(users, logs) {
     userList.innerHTML = users.length
       ? users
@@ -536,13 +560,19 @@ function initHomePage() {
     renderLeaderboard(leaderboardData.leaderboard);
 
     if (user.role === "admin") {
-      const [usersData, logsData, shopData] = await Promise.all([
+      const [usersData, logsData, shopData, wheelData] = await Promise.all([
         api("/api/users", { method: "GET" }),
         api("/api/redemptions", { method: "GET" }),
         api("/api/shop", { method: "GET" }),
+        api("/api/wheel-config", { method: "GET" }),
       ]);
       renderAdminLists(usersData.users, logsData.logs);
       renderShopManager(shopData.items);
+      wheelData.options.forEach((value, index) => {
+        if (wheelOptionInputs[index]) {
+          wheelOptionInputs[index].value = value;
+        }
+      });
     }
   }
 
@@ -552,6 +582,10 @@ function initHomePage() {
 
   createShopItemButton.addEventListener("click", () => {
     createShopItem();
+  });
+
+  saveWheelConfigButton.addEventListener("click", () => {
+    saveWheelConfig();
   });
 
   shopButton.addEventListener("click", () => {
@@ -745,6 +779,7 @@ function initWheelPage() {
   const wheelDisc = document.getElementById("wheelDisc");
   const wheelResultText = document.getElementById("wheelResultText");
   const logoutButton = document.getElementById("logoutButton");
+  const wheelLegend = document.querySelector(".wheel-legend");
 
   const rotationMap = [315, 45, 225, 135];
   let currentRotation = 0;
@@ -752,6 +787,7 @@ function initWheelPage() {
   let wheelStatus = {
     tickets: 0,
     claimedToday: false,
+    options: [-25, 25, -50, 50],
   };
 
   function renderStatus() {
@@ -767,6 +803,18 @@ function initWheelPage() {
     spinButton.disabled = wheelStatus.tickets < 1;
   }
 
+  function renderWheelLegend() {
+    wheelLegend.innerHTML = wheelStatus.options
+      .map(
+        (value) => `
+          <div class="wheel-chip ${value >= 0 ? "gain" : "loss"}">
+            ${value > 0 ? "+" : ""}${value}%
+          </div>
+        `
+      )
+      .join("");
+  }
+
   async function refreshWheelData() {
     user = await getCurrentUser();
     if (user.role === "admin") {
@@ -779,8 +827,10 @@ function initWheelPage() {
     wheelStatus = {
       tickets: statusData.tickets,
       claimedToday: statusData.claimedToday,
+      options: statusData.options,
     };
     renderStatus();
+    renderWheelLegend();
   }
 
   async function claimTicket() {
