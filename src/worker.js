@@ -26,41 +26,42 @@ export default {
 async function routeRequest(request, env) {
   const url = new URL(request.url);
   const { pathname } = url;
+  const route = pathname.replace(/^\/api/, "") || "/";
 
   if (pathname === "/health") {
     return json({ success: true, database: "d1" });
   }
 
-  if (pathname === "/auth/register" && request.method === "POST") {
+  if (route === "/auth/register" && request.method === "POST") {
     return handleBrowserRegister(request, env);
   }
 
-  if (pathname === "/auth/login" && request.method === "POST") {
+  if (route === "/auth/login" && request.method === "POST") {
     return handleBrowserLogin(request, env);
   }
 
-  if (pathname === "/logout" && request.method === "POST") {
+  if (route === "/logout" && request.method === "POST") {
     return clearSessionAndRedirect();
   }
 
-  if (pathname === "/register" && request.method === "POST") {
+  if (route === "/register" && request.method === "POST") {
     const body = await request.json();
     const result = await registerUser(env, body.username, body.password);
     return json({ success: true, user: result.user });
   }
 
-  if (pathname === "/login" && request.method === "POST") {
+  if (route === "/login" && request.method === "POST") {
     const body = await request.json();
     const result = await loginUser(env, body.username, body.password);
     return json({ success: true, user: result.user });
   }
 
-  if (pathname === "/me" && request.method === "GET") {
+  if (route === "/me" && request.method === "GET") {
     const user = await requireUser(request, env);
     return json({ success: true, user });
   }
 
-  if (pathname === "/users" && request.method === "GET") {
+  if (route === "/users" && request.method === "GET") {
     const user = await requireAdmin(request, env);
     void user;
     const users = await dbAll(
@@ -73,7 +74,7 @@ async function routeRequest(request, env) {
     });
   }
 
-  if (pathname === "/leaderboard" && request.method === "GET") {
+  if (route === "/leaderboard" && request.method === "GET") {
     await requireUser(request, env);
     const leaderboard = await dbAll(
       env,
@@ -93,7 +94,7 @@ async function routeRequest(request, env) {
     });
   }
 
-  if (pathname === "/points" && request.method === "POST") {
+  if (route === "/points" && request.method === "POST") {
     await requireAdmin(request, env);
     const body = await request.json();
     const username = String(body.username || "").trim();
@@ -132,7 +133,7 @@ async function routeRequest(request, env) {
     });
   }
 
-  if (pathname === "/shop" && request.method === "GET") {
+  if (route === "/shop" && request.method === "GET") {
     await requireUser(request, env);
     const items = await dbAll(
       env,
@@ -149,7 +150,7 @@ async function routeRequest(request, env) {
     });
   }
 
-  if (pathname === "/redeem" && request.method === "POST") {
+  if (route === "/redeem" && request.method === "POST") {
     const user = await requireUser(request, env);
     const body = await request.json();
     const itemId = Number(body.itemId);
@@ -202,7 +203,7 @@ async function routeRequest(request, env) {
     });
   }
 
-  if (pathname === "/redemptions" && request.method === "GET") {
+  if (route === "/redemptions" && request.method === "GET") {
     await requireAdmin(request, env);
     const logs = await dbAll(
       env,
