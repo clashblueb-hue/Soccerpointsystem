@@ -15,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "soccer-points-system-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      "database_id": "a4a70e2e-29fb-430b-b0e6-4f25883583bc"
     }
   ]
 }
