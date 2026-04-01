@@ -1,1 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Player Rewards Home</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="home">
+    <div class="page">
+      <!-- This is the main page after login for both players and admins. -->
+      <section class="hero">
+        <span class="eyebrow">Rewards Home</span>
+        <h1 id="heroTitle">Welcome</h1>
+        <p class="muted" id="heroText">Loading your account...</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 id="welcomeTitle">Account</h2>
+            <p class="muted">
+              This page changes based on whether the user is a player or admin.
+            </p>
+          </div>
+          <div class="actions">
+            <button class="ghost" id="shopButton" type="button">Open Shop</button>
+            <button class="ghost" id="logoutButton" type="button">Logout</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <article class="stat-card">
+            <div class="muted">Role</div>
+            <div class="stat-value" id="roleValue">-</div>
+          </article>
+          <article class="stat-card">
+            <div class="muted">Points</div>
+            <div class="stat-value" id="pointsValue">0</div>
+          </article>
+          <article class="note-card">
+            <div class="muted">What to do next</div>
+            <p id="nextStepText">Loading your next step...</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="playerHome" class="panel hidden">
+        <div class="panel-header">
+          <div>
+            <h2>Player Home</h2>
+            <p class="muted">Use the shop button above to redeem rewards.</p>
+          </div>
+        </div>
+        <div class="note-card">
+          <p>
+            Wait for the admin to add points to your account, then open the shop
+            and redeem something you want.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Leaderboard</h2>
+            <p class="muted">Top players by points.</p>
+          </div>
+        </div>
+        <div id="leaderboardList" class="user-list"></div>
+      </section>
+
+      <section id="adminHome" class="grid dashboard-grid hidden">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Players</h2>
+              <p class="muted">Use these buttons to add or remove points.</p>
+            </div>
+          </div>
+          <div id="userList" class="user-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Redemption Log</h2>
+              <p class="muted">This shows what players bought from the shop.</p>
+            </div>
+          </div>
+          <div id="logList" class="log-list"></div>
+        </div>
+      </section>
+
+      <div id="message" class="message"></div>
+    </div>
+  </body>
+</html>
 
