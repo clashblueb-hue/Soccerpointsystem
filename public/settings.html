@@ -1,511 +1,72 @@
-:root {
-  --bg-top: #08111f;
-  --bg-bottom: #111827;
-  --panel: rgba(10, 18, 33, 0.82);
-  --panel-border: rgba(148, 163, 184, 0.16);
-  --card: rgba(17, 24, 39, 0.86);
-  --text: #ecf3ff;
-  --muted: #9fb0ca;
-  --accent: #f4b942;
-  --accent-2: #67e8f9;
-  --success: #86efac;
-  --danger: #fca5a5;
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  color: var(--text);
-  background:
-    radial-gradient(circle at top left, rgba(103, 232, 249, 0.18), transparent 30%),
-      radial-gradient(circle at top right, rgba(244, 185, 66, 0.18), transparent 26%),
-    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-}
-
-body[data-theme="sunset"] {
-  --bg-top: #2a1023;
-  --bg-bottom: #4a1f1f;
-  --panel: rgba(44, 17, 29, 0.84);
-  --card: rgba(58, 24, 37, 0.88);
-  --accent: #ffb347;
-  --accent-2: #ffd6a5;
-  background:
-    radial-gradient(circle at top left, rgba(255, 179, 71, 0.18), transparent 30%),
-    radial-gradient(circle at top right, rgba(251, 113, 133, 0.18), transparent 26%),
-    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-}
-
-body[data-theme="forest"] {
-  --bg-top: #071b14;
-  --bg-bottom: #123329;
-  --panel: rgba(9, 27, 21, 0.84);
-  --card: rgba(15, 38, 29, 0.88);
-  --accent: #facc15;
-  --accent-2: #86efac;
-  background:
-    radial-gradient(circle at top left, rgba(134, 239, 172, 0.14), transparent 30%),
-    radial-gradient(circle at top right, rgba(250, 204, 21, 0.16), transparent 26%),
-    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-}
-
-body[data-theme="ocean"] {
-  --bg-top: #071827;
-  --bg-bottom: #102e4d;
-  --panel: rgba(9, 24, 40, 0.84);
-  --card: rgba(13, 33, 54, 0.88);
-  --accent: #7dd3fc;
-  --accent-2: #c4b5fd;
-  background:
-    radial-gradient(circle at top left, rgba(125, 211, 252, 0.18), transparent 30%),
-    radial-gradient(circle at top right, rgba(196, 181, 253, 0.16), transparent 26%),
-    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-}
-
-.page {
-  width: min(1140px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 28px 0 48px;
-}
-
-.hero,
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 26px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(16px);
-}
-
-.hero {
-  display: grid;
-  gap: 12px;
-  padding: 28px;
-  margin-bottom: 22px;
-}
-
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.78rem;
-  color: var(--accent-2);
-}
-
-h1,
-h2,
-h3,
-p {
-  margin: 0;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.grid {
-  display: grid;
-  gap: 20px;
-}
-
-.auth-grid,
-.dashboard-grid,
-.shop-grid,
-.stats,
-.wheel-layout {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-}
-
-.panel {
-  padding: 22px;
-}
-
-.panel-header,
-.row,
-.actions,
-.shop-top,
-.pill-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 12px;
-}
-
-.actions,
-.pill-row {
-  flex-wrap: wrap;
-}
-
-.stack {
-  display: grid;
-  gap: 12px;
-}
-
-input {
-  width: 100%;
-  padding: 13px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.9);
-  color: var(--text);
-  font-size: 0.98rem;
-}
-
-select {
-  width: 100%;
-  padding: 13px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.9);
-  color: var(--text);
-  font-size: 0.98rem;
-}
-
-button,
-.button-link {
-  border: 0;
-  border-radius: 999px;
-  padding: 12px 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    transform 0.14s ease,
-    opacity 0.14s ease;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-button:hover,
-.button-link:hover {
-  transform: translateY(-1px);
-}
-
-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.primary {
-  background: linear-gradient(135deg, var(--accent), #fb7185);
-  color: #101827;
-}
-
-.secondary {
-  background: rgba(103, 232, 249, 0.15);
-  color: #ddfbff;
-}
-
-.ghost {
-  background: rgba(148, 163, 184, 0.13);
-  color: var(--text);
-}
-
-.danger {
-  background: rgba(248, 113, 113, 0.14);
-  color: #ffe7e7;
-}
-
-.stats {
-  display: grid;
-  gap: 14px;
-}
-
-.stat-card,
-.note-card,
-.user-card,
-.log-card,
-.shop-card {
-  background: var(--card);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 18px;
-  padding: 16px;
-}
-
-.user-list,
-.log-list,
-.shop-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.leaderboard-entry,
-.snack-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-card,
-.log-card,
-.shop-card {
-  display: grid;
-  gap: 12px;
-}
-
-.stat-value {
-  margin-top: 8px;
-  font-size: 2rem;
-  font-weight: 800;
-}
-
-.points,
-.cost {
-  color: var(--accent);
-  font-weight: 800;
-}
-
-.role {
-  color: var(--accent-2);
-  text-transform: capitalize;
-}
-
-.pill {
-  display: inline-flex;
-  padding: 9px 15px;
-  border-radius: 999px;
-  background: rgba(103, 232, 249, 0.12);
-  color: #dffcff;
-  font-weight: 700;
-}
-
-.profile-badge {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-}
-
-.profile-circle {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #101827;
-  font-size: 1.4rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.profile-circle-large {
-  width: 96px;
-  height: 96px;
-  font-size: 2.2rem;
-}
-
-.rank-badge {
-  min-width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(103, 232, 249, 0.15);
-  color: var(--accent-2);
-  font-weight: 800;
-}
-
-.snack-details {
-  border-radius: 16px;
-  background: rgba(148, 163, 184, 0.08);
-  padding: 12px 14px;
-}
-
-.snack-details summary {
-  cursor: pointer;
-  list-style: none;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.snack-details summary::-webkit-details-marker {
-  display: none;
-}
-
-.snack-options {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.shop-admin-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.checkbox-stack {
-  align-content: end;
-}
-
-.toggle-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text);
-  font-weight: 700;
-}
-
-.toggle-row input {
-  width: auto;
-  margin: 0;
-}
-
-.stock-tag {
-  display: inline-flex;
-  width: fit-content;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(248, 113, 113, 0.14);
-  color: #ffd6d6;
-  font-weight: 800;
-}
-
-.wheel-panel {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-}
-
-.settings-preview-panel {
-  display: grid;
-  align-content: start;
-}
-
-.settings-preview-card {
-  display: grid;
-  justify-items: center;
-  text-align: center;
-  gap: 14px;
-  min-height: 100%;
-}
-
-.wheel-stage {
-  position: relative;
-  display: grid;
-  place-items: center;
-  padding-top: 12px;
-}
-
-.wheel-pointer {
-  position: absolute;
-  top: 0;
-  width: 0;
-  height: 0;
-  border-left: 16px solid transparent;
-  border-right: 16px solid transparent;
-  border-top: 26px solid var(--accent);
-  z-index: 2;
-}
-
-.wheel-disc {
-  width: min(320px, 100%);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  border: 10px solid rgba(148, 163, 184, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  background:
-    conic-gradient(
-      from -45deg,
-      rgba(248, 113, 113, 0.9) 0deg 90deg,
-      rgba(103, 232, 249, 0.9) 90deg 180deg,
-      rgba(244, 185, 66, 0.9) 180deg 270deg,
-      rgba(52, 211, 153, 0.9) 270deg 360deg
-    );
-  display: grid;
-  place-items: center;
-  transition: transform 3.4s cubic-bezier(0.18, 0.9, 0.2, 1);
-}
-
-.wheel-center {
-  width: 40%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(10, 18, 33, 0.92);
-  color: var(--text);
-  font-size: 1.4rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
-}
-
-.wheel-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.wheel-chip {
-  border-radius: 999px;
-  padding: 10px 14px;
-  font-weight: 800;
-}
-
-.wheel-chip.loss {
-  background: rgba(248, 113, 113, 0.14);
-  color: #ffd6d6;
-}
-
-.wheel-chip.gain {
-  background: rgba(52, 211, 153, 0.16);
-  color: #d6ffef;
-}
-
-.message {
-  min-height: 24px;
-  margin-top: 14px;
-  font-weight: 700;
-}
-
-.message.success {
-  color: var(--success);
-}
-
-.message.error {
-  color: var(--danger);
-}
-
-.empty {
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--muted);
-}
-
-.hidden {
-  display: none;
-}
-
-@media (max-width: 720px) {
-  .page {
-    width: min(100% - 20px, 1140px);
-    padding-top: 18px;
-  }
-
-  .hero,
-  .panel {
-    border-radius: 20px;
-  }
-
-  .panel-header,
-  .row,
-  .actions,
-  .shop-top,
-  .pill-row,
-  .leaderboard-entry,
-  .snack-option {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Player Settings</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="settings">
+    <div class="page">
+      <section class="hero">
+        <span class="eyebrow">Player Settings</span>
+        <h1>Customize your home page style.</h1>
+        <p class="muted">
+          Pick a theme and one letter to act as your profile picture.
+        </p>
+      </section>
+
+      <section class="grid wheel-layout">
+        <div class="panel stack">
+          <div class="panel-header">
+            <div>
+              <h2>Your Style</h2>
+              <p class="muted">Changes save to your account and show on your home page.</p>
+            </div>
+            <div class="actions">
+              <a class="button-link ghost" href="/home.html">Back to Home</a>
+              <a class="button-link ghost" href="/shop.html">Open Shop</a>
+              <a class="button-link ghost" href="/wheel.html">Daily Wheel</a>
+              <button class="ghost" id="logoutButton" type="button">Logout</button>
+            </div>
+          </div>
+
+          <label class="stack">
+            <span class="muted">Theme</span>
+            <select id="themeSelect">
+              <option value="default">Default</option>
+              <option value="sunset">Sunset</option>
+              <option value="forest">Forest</option>
+              <option value="ocean">Ocean</option>
+            </select>
+          </label>
+
+          <label class="stack">
+            <span class="muted">Profile letter</span>
+            <input
+              id="profileLetterInput"
+              type="text"
+              maxlength="1"
+              placeholder="P"
+            />
+          </label>
+
+          <div class="actions">
+            <button class="primary" id="saveSettingsButton" type="button">Save Settings</button>
+          </div>
+
+          <div id="message" class="message"></div>
+        </div>
+
+        <div class="panel settings-preview-panel">
+          <div class="note-card settings-preview-card">
+            <div class="profile-circle profile-circle-large" id="settingsPreviewLetter">P</div>
+            <h2 id="settingsPreviewName">Player Preview</h2>
+            <p class="muted">This preview shows how your home page theme and profile letter will look.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
