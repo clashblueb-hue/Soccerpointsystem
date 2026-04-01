@@ -76,11 +76,44 @@
         <div class="panel">
           <div class="panel-header">
             <div>
-            <h2>Players</h2>
+              <h2>Players</h2>
               <p class="muted">Use these buttons to add or remove points, or delete an extra player account.</p>
             </div>
           </div>
           <div id="userList" class="user-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Shop Manager</h2>
+              <p class="muted">Change prices or mark items out of stock and players will see the update.</p>
+            </div>
+          </div>
+          <div class="note-card stack">
+            <h3>Add Shop Item</h3>
+            <div class="shop-admin-grid">
+              <label class="stack">
+                <span class="muted">Item name</span>
+                <input id="newShopName" type="text" placeholder="New item name" />
+              </label>
+              <label class="stack">
+                <span class="muted">Price</span>
+                <input id="newShopCost" type="number" min="0" step="1" value="10" />
+              </label>
+              <label class="stack">
+                <span class="muted">Type</span>
+                <select id="newShopCategory">
+                  <option value="reward">Reward</option>
+                  <option value="snack">Snack</option>
+                </select>
+              </label>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="createShopItemButton" type="button">Add Item</button>
+            </div>
+          </div>
+          <div id="shopAdminList" class="user-list"></div>
         </div>
 
         <div class="panel">
