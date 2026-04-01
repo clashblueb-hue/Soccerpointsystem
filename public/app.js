@@ -108,6 +108,7 @@ function initHomePage() {
   const userList = document.getElementById("userList");
   const logList = document.getElementById("logList");
   const shopButton = document.getElementById("shopButton");
+  const wheelButton = document.getElementById("wheelButton");
   const logoutButton = document.getElementById("logoutButton");
 
   let user = null;
@@ -123,18 +124,20 @@ function initHomePage() {
       heroText.textContent =
         "You can manage player balances and review redemptions here.";
       nextStepText.textContent =
-        "Use the player cards below to add or remove points.";
+        "Use the player cards below to add or remove points, or delete an extra player account.";
       playerHome.classList.add("hidden");
       adminHome.classList.remove("hidden");
+      wheelButton.classList.add("hidden");
       return;
     }
 
     heroText.textContent =
       "Open the shop when you want to spend the points you have earned.";
     nextStepText.textContent =
-      "Use the Open Shop button to redeem rewards from your current balance.";
+      "Use the Open Shop button or Daily Wheel button to try to grow your points.";
     playerHome.classList.remove("hidden");
     adminHome.classList.add("hidden");
+    wheelButton.classList.remove("hidden");
   }
 
   async function adjustPoints(username, amount) {
@@ -155,6 +158,28 @@ function initHomePage() {
 
   window.adjustPoints = adjustPoints;
 
+  async function deleteUser(username) {
+    clearMessage(message);
+
+    if (!window.confirm(`Delete the account "${username}"?`)) {
+      return;
+    }
+
+    try {
+      const data = await api("/api/users/delete", {
+        method: "POST",
+        body: JSON.stringify({ username }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.deleteUser = deleteUser;
+
   function renderAdminLists(users, logs) {
     userList.innerHTML = users.length
       ? users
@@ -174,6 +199,11 @@ function initHomePage() {
                   <button class="secondary" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), 50)">+50</button>
                   <button class="danger" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), -5)">-5</button>
                   <button class="danger" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), -10)">-10</button>
+                  ${
+                    entry.role === "admin"
+                      ? ""
+                      : `<button class="danger" onclick="deleteUser(decodeURIComponent('${encodeURIComponent(entry.username)}'))">Delete</button>`
+                  }
                 </div>
               </article>
             `
@@ -251,6 +281,15 @@ function initHomePage() {
     }
 
     window.location.href = "/shop.html";
+  });
+
+  wheelButton.addEventListener("click", () => {
+    if (user && user.role === "admin") {
+      setMessage(message, "Admins do not use the daily wheel.", "error");
+      return;
+    }
+
+    window.location.href = "/wheel.html";
   });
 
   loadPage().catch((error) => {
@@ -389,6 +428,115 @@ function initShopPage() {
   });
 }
 
+function initWheelPage() {
+  const message = document.getElementById("message");
+  const wheelPlayerName = document.getElementById("wheelPlayerName");
+  const wheelPlayerPoints = document.getElementById("wheelPlayerPoints");
+  const ticketCount = document.getElementById("ticketCount");
+  const wheelPointsValue = document.getElementById("wheelPointsValue");
+  const wheelTicketsValue = document.getElementById("wheelTicketsValue");
+  const claimStatusText = document.getElementById("claimStatusText");
+  const betAmount = document.getElementById("betAmount");
+  const claimTicketButton = document.getElementById("claimTicketButton");
+  const spinButton = document.getElementById("spinButton");
+  const wheelDisc = document.getElementById("wheelDisc");
+  const wheelResultText = document.getElementById("wheelResultText");
+  const logoutButton = document.getElementById("logoutButton");
+
+  const rotationMap = [315, 45, 225, 135];
+  let currentRotation = 0;
+  let user = null;
+  let wheelStatus = {
+    tickets: 0,
+    claimedToday: false,
+  };
+
+  function renderStatus() {
+    wheelPlayerName.textContent = user.username;
+    wheelPlayerPoints.textContent = `${user.points} points`;
+    ticketCount.textContent = `${wheelStatus.tickets} ticket${wheelStatus.tickets === 1 ? "" : "s"}`;
+    wheelPointsValue.textContent = user.points;
+    wheelTicketsValue.textContent = wheelStatus.tickets;
+    claimStatusText.textContent = wheelStatus.claimedToday
+      ? "Today's ticket is already claimed."
+      : "You can claim 1 ticket today.";
+    claimTicketButton.disabled = wheelStatus.claimedToday;
+    spinButton.disabled = wheelStatus.tickets < 1;
+  }
+
+  async function refreshWheelData() {
+    user = await getCurrentUser();
+    if (user.role === "admin") {
+      window.location.href = "/home.html";
+      return;
+    }
+
+    const statusData = await api("/api/wheel-status", { method: "GET" });
+    wheelStatus = {
+      tickets: statusData.tickets,
+      claimedToday: statusData.claimedToday,
+    };
+    renderStatus();
+  }
+
+  async function claimTicket() {
+    clearMessage(message);
+
+    try {
+      const data = await api("/api/wheel-claim", { method: "POST" });
+      wheelStatus.tickets = data.tickets;
+      wheelStatus.claimedToday = data.claimedToday;
+      renderStatus();
+      setMessage(message, data.message);
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  async function spinWheel() {
+    clearMessage(message);
+    const amount = Number(betAmount.value);
+
+    try {
+      const data = await api("/api/wheel-spin", {
+        method: "POST",
+        body: JSON.stringify({ betAmount: amount }),
+      });
+
+      user = data.user;
+      wheelStatus.tickets = data.tickets;
+      currentRotation += 1440 + rotationMap[data.result.index];
+      wheelDisc.style.transform = `rotate(${currentRotation}deg)`;
+      wheelResultText.textContent =
+        `${data.result.label} on a ${data.result.betAmount} point bet. ` +
+        `${data.result.pointChange >= 0 ? "Won" : "Lost"} ${Math.abs(data.result.pointChange)} points.`;
+      renderStatus();
+      setMessage(message, data.message);
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  claimTicketButton.addEventListener("click", () => {
+    claimTicket();
+  });
+
+  spinButton.addEventListener("click", () => {
+    spinWheel();
+  });
+
+  logoutButton.addEventListener("click", () => {
+    logout();
+  });
+
+  refreshWheelData().catch((error) => {
+    setMessage(message, error.message || "Please log in first.", "error");
+    setTimeout(() => {
+      window.location.href = "/index.html";
+    }, 1000);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const page = document.body.dataset.page;
 
@@ -404,6 +552,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (page === "shop") {
     initShopPage();
+    return;
+  }
+
+  if (page === "wheel") {
+    initWheelPage();
   }
 });
-
