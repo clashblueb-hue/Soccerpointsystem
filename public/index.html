@@ -1,1 +1,74 @@
 
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Player Rewards Login</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="index">
+    <div class="page">
+      <!-- Start here on Cloudflare. These forms post straight to the Worker. -->
+      <section class="hero">
+        <span class="eyebrow">Player Rewards</span>
+        <h1>Login or create a new player account.</h1>
+        <p class="muted">
+          New player accounts start at 0 points. After login, everyone goes to
+          the home page.
+        </p>
+      </section>
+
+      <section class="grid auth-grid">
+        <form id="loginForm" class="panel stack" method="post" action="/auth/login">
+          <h2>Login</h2>
+          <p class="muted">Use this if you already have an account.</p>
+          <input
+            id="loginUsername"
+            name="username"
+            placeholder="Username"
+            autocomplete="username"
+            required
+          />
+          <input
+            id="loginPassword"
+            name="password"
+            type="password"
+            placeholder="Password"
+            autocomplete="current-password"
+            required
+          />
+          <button class="primary" id="loginButton" type="submit">Login</button>
+        </form>
+
+        <form id="registerForm" class="panel stack" method="post" action="/auth/register">
+          <h2>Create Player Account</h2>
+          <p class="muted">
+            Pick a username and password to create a new account.
+          </p>
+          <input
+            id="registerUsername"
+            name="username"
+            placeholder="New username"
+            autocomplete="username"
+            required
+          />
+          <input
+            id="registerPassword"
+            name="password"
+            type="password"
+            placeholder="New password"
+            autocomplete="new-password"
+            required
+          />
+          <button class="secondary" id="registerButton" type="submit">
+            Create Account
+          </button>
+        </form>
+      </section>
+
+      <div id="message" class="message"></div>
+    </div>
+  </body>
+</html>
