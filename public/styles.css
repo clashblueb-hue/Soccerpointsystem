@@ -24,7 +24,46 @@ body {
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(103, 232, 249, 0.18), transparent 30%),
-    radial-gradient(circle at top right, rgba(244, 185, 66, 0.18), transparent 26%),
+      radial-gradient(circle at top right, rgba(244, 185, 66, 0.18), transparent 26%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+}
+
+body[data-theme="sunset"] {
+  --bg-top: #2a1023;
+  --bg-bottom: #4a1f1f;
+  --panel: rgba(44, 17, 29, 0.84);
+  --card: rgba(58, 24, 37, 0.88);
+  --accent: #ffb347;
+  --accent-2: #ffd6a5;
+  background:
+    radial-gradient(circle at top left, rgba(255, 179, 71, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(251, 113, 133, 0.18), transparent 26%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+}
+
+body[data-theme="forest"] {
+  --bg-top: #071b14;
+  --bg-bottom: #123329;
+  --panel: rgba(9, 27, 21, 0.84);
+  --card: rgba(15, 38, 29, 0.88);
+  --accent: #facc15;
+  --accent-2: #86efac;
+  background:
+    radial-gradient(circle at top left, rgba(134, 239, 172, 0.14), transparent 30%),
+    radial-gradient(circle at top right, rgba(250, 204, 21, 0.16), transparent 26%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+}
+
+body[data-theme="ocean"] {
+  --bg-top: #071827;
+  --bg-bottom: #102e4d;
+  --panel: rgba(9, 24, 40, 0.84);
+  --card: rgba(13, 33, 54, 0.88);
+  --accent: #7dd3fc;
+  --accent-2: #c4b5fd;
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(196, 181, 253, 0.16), transparent 26%),
     linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
 }
 
@@ -237,6 +276,31 @@ button:disabled {
   font-weight: 700;
 }
 
+.profile-badge {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.profile-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #101827;
+  font-size: 1.4rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.profile-circle-large {
+  width: 96px;
+  height: 96px;
+  font-size: 2.2rem;
+}
+
 .rank-badge {
   min-width: 34px;
   height: 34px;
@@ -309,6 +373,19 @@ button:disabled {
   display: grid;
   gap: 18px;
   align-content: start;
+}
+
+.settings-preview-panel {
+  display: grid;
+  align-content: start;
+}
+
+.settings-preview-card {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 14px;
+  min-height: 100%;
 }
 
 .wheel-stage {
