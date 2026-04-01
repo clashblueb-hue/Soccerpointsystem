@@ -32,8 +32,124 @@ function clearMessage(element) {
   element.className = "message";
 }
 
+const PLAYER_STYLE_KEY = "player-style";
+
 function applyTheme(theme) {
   document.body.dataset.theme = theme || "default";
+}
+
+function applyClickEffect(effect) {
+  const nextEffect = effect || "none";
+  document.body.dataset.clickEffect = nextEffect;
+
+  const pendingEffect = sessionStorage.getItem("page-effect");
+  if (pendingEffect && pendingEffect === nextEffect && nextEffect !== "none") {
+    document.body.classList.remove("effect-transition-out");
+    requestAnimationFrame(() => {
+      document.body.classList.add("effect-transition-in");
+      setTimeout(() => {
+        document.body.classList.remove("effect-transition-in");
+      }, nextEffect === "snap" ? 900 : 450);
+    });
+  }
+
+  if (pendingEffect) {
+    sessionStorage.removeItem("page-effect");
+  }
+}
+
+function applyPlayerStyle(user) {
+  applyTheme(user.theme);
+  applyClickEffect(user.clickEffect);
+  savePlayerStyle(user);
+}
+
+function savePlayerStyle(user) {
+  try {
+    localStorage.setItem(
+      PLAYER_STYLE_KEY,
+      JSON.stringify({
+        theme: user.theme || "default",
+        clickEffect: user.clickEffect || "none",
+        profileLetter: user.profileLetter || "P",
+      })
+    );
+  } catch {}
+}
+
+function getSavedPlayerStyle() {
+  try {
+    const raw = localStorage.getItem(PLAYER_STYLE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function primeSavedStyle() {
+  const savedStyle = getSavedPlayerStyle();
+  if (!savedStyle) {
+    return;
+  }
+
+  applyTheme(savedStyle.theme);
+  applyClickEffect(savedStyle.clickEffect);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function triggerPageEffect(effect, mode = "navigate") {
+  const nextEffect = effect || document.body.dataset.clickEffect || "none";
+  if (nextEffect === "none") {
+    return;
+  }
+
+  document.body.dataset.clickEffect = nextEffect;
+  document.body.classList.remove("effect-transition-in");
+  void document.body.offsetWidth;
+  document.body.classList.add("effect-transition-out");
+  await wait(nextEffect === "snap" ? 800 : 350);
+
+  if (mode === "preview") {
+    document.body.classList.remove("effect-transition-out");
+    document.body.classList.add("effect-transition-in");
+    await wait(nextEffect === "snap" ? 900 : 450);
+    document.body.classList.remove("effect-transition-in");
+  }
+}
+
+async function goTo(url) {
+  const effect = document.body.dataset.clickEffect || "none";
+  if (effect !== "none") {
+    sessionStorage.setItem("page-effect", effect);
+    await triggerPageEffect(effect, "navigate");
+  }
+  window.location.href = url;
+}
+
+function installInteractiveLinks() {
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest("a.button-link");
+    if (!link || event.defaultPrevented) {
+      return;
+    }
+
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+
+    const href = link.getAttribute("href");
+    if (!href || href.startsWith("http") || href.startsWith("#")) {
+      return;
+    }
+
+    event.preventDefault();
+    goTo(href);
+  });
 }
 
 async function api(path, options = {}) {
@@ -78,6 +194,10 @@ async function getCurrentUser() {
 
 async function logout() {
   await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+  document.body.dataset.clickEffect = "none";
+  try {
+    localStorage.removeItem(PLAYER_STYLE_KEY);
+  } catch {}
   window.location.href = "/index.html";
 }
 
@@ -93,7 +213,7 @@ function initIndexPage() {
   // If the user already has a valid cookie, skip the login page.
   getCurrentUser()
     .then(() => {
-      window.location.href = "/home.html";
+      goTo("/home.html");
     })
     .catch(() => {});
 }
@@ -130,7 +250,7 @@ function initHomePage() {
     roleValue.textContent =
       user.role.charAt(0).toUpperCase() + user.role.slice(1);
     pointsValue.textContent = user.points;
-    applyTheme(user.theme);
+    applyPlayerStyle(user);
 
     if (user.role === "admin") {
       heroText.textContent =
@@ -440,7 +560,7 @@ function initHomePage() {
       return;
     }
 
-    window.location.href = "/shop.html";
+    goTo("/shop.html");
   });
 
   wheelButton.addEventListener("click", () => {
@@ -449,7 +569,7 @@ function initHomePage() {
       return;
     }
 
-    window.location.href = "/wheel.html";
+    goTo("/wheel.html");
   });
 
   settingsButton.addEventListener("click", () => {
@@ -458,7 +578,7 @@ function initHomePage() {
       return;
     }
 
-    window.location.href = "/settings.html";
+    goTo("/settings.html");
   });
 
   loadPage().catch((error) => {
@@ -582,10 +702,11 @@ function initShopPage() {
   async function loadPage() {
     user = await getCurrentUser();
     if (user.role === "admin") {
-      window.location.href = "/home.html";
+      goTo("/home.html");
       return;
     }
 
+    applyPlayerStyle(user);
     renderHeader();
     const data = await api("/api/shop", { method: "GET" });
     renderShop(data.items);
@@ -649,10 +770,11 @@ function initWheelPage() {
   async function refreshWheelData() {
     user = await getCurrentUser();
     if (user.role === "admin") {
-      window.location.href = "/home.html";
+      goTo("/home.html");
       return;
     }
 
+    applyPlayerStyle(user);
     const statusData = await api("/api/wheel-status", { method: "GET" });
     wheelStatus = {
       tickets: statusData.tickets,
@@ -723,6 +845,8 @@ function initSettingsPage() {
   const message = document.getElementById("message");
   const themeSelect = document.getElementById("themeSelect");
   const profileLetterInput = document.getElementById("profileLetterInput");
+  const clickEffectSelect = document.getElementById("clickEffectSelect");
+  const previewEffectButton = document.getElementById("previewEffectButton");
   const saveSettingsButton = document.getElementById("saveSettingsButton");
   const settingsPreviewLetter = document.getElementById("settingsPreviewLetter");
   const settingsPreviewName = document.getElementById("settingsPreviewName");
@@ -737,6 +861,7 @@ function initSettingsPage() {
       .toUpperCase() || "P";
     settingsPreviewLetter.textContent = letter;
     applyTheme(themeSelect.value);
+    document.body.dataset.clickEffect = clickEffectSelect.value;
   }
 
   async function loadSettings() {
@@ -749,6 +874,7 @@ function initSettingsPage() {
     const data = await api("/api/settings", { method: "GET" });
     themeSelect.value = data.settings.theme;
     profileLetterInput.value = data.settings.profileLetter;
+    clickEffectSelect.value = data.settings.clickEffect;
     settingsPreviewName.textContent = `${user.username}'s Preview`;
     syncPreview();
   }
@@ -762,12 +888,15 @@ function initSettingsPage() {
         body: JSON.stringify({
           theme: themeSelect.value,
           profileLetter: profileLetterInput.value,
+          clickEffect: clickEffectSelect.value,
         }),
       });
 
       user = data.user;
+      savePlayerStyle(data.user);
       themeSelect.value = data.settings.theme;
       profileLetterInput.value = data.settings.profileLetter;
+      clickEffectSelect.value = data.settings.clickEffect;
       syncPreview();
       setMessage(message, data.message);
     } catch (error) {
@@ -776,12 +905,21 @@ function initSettingsPage() {
   }
 
   themeSelect.addEventListener("change", syncPreview);
+  clickEffectSelect.addEventListener("change", syncPreview);
   profileLetterInput.addEventListener("input", () => {
     profileLetterInput.value = String(profileLetterInput.value || "")
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 1);
     syncPreview();
+  });
+  previewEffectButton.addEventListener("click", async () => {
+    clearMessage(message);
+    if (clickEffectSelect.value === "none") {
+      setMessage(message, "Choose Fade or Snap to preview an interactive effect.", "error");
+      return;
+    }
+    await triggerPageEffect(clickEffectSelect.value, "preview");
   });
   saveSettingsButton.addEventListener("click", saveSettings);
   logoutButton.addEventListener("click", () => {
@@ -797,6 +935,8 @@ function initSettingsPage() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  installInteractiveLinks();
+  primeSavedStyle();
   const page = document.body.dataset.page;
 
   if (page === "index") {
@@ -823,4 +963,3 @@ document.addEventListener("DOMContentLoaded", () => {
     initSettingsPage();
   }
 });
-
