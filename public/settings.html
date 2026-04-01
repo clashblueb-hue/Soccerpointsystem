@@ -1,1 +1,73 @@
 
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Player Settings</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="settings">
+    <div class="page">
+      <section class="hero">
+        <span class="eyebrow">Player Settings</span>
+        <h1>Customize your home page style.</h1>
+        <p class="muted">
+          Pick a theme and one letter to act as your profile picture.
+        </p>
+      </section>
+
+      <section class="grid wheel-layout">
+        <div class="panel stack">
+          <div class="panel-header">
+            <div>
+              <h2>Your Style</h2>
+              <p class="muted">Changes save to your account and show on your home page.</p>
+            </div>
+            <div class="actions">
+              <a class="button-link ghost" href="/home.html">Back to Home</a>
+              <a class="button-link ghost" href="/shop.html">Open Shop</a>
+              <a class="button-link ghost" href="/wheel.html">Daily Wheel</a>
+              <button class="ghost" id="logoutButton" type="button">Logout</button>
+            </div>
+          </div>
+
+          <label class="stack">
+            <span class="muted">Theme</span>
+            <select id="themeSelect">
+              <option value="default">Default</option>
+              <option value="sunset">Sunset</option>
+              <option value="forest">Forest</option>
+              <option value="ocean">Ocean</option>
+            </select>
+          </label>
+
+          <label class="stack">
+            <span class="muted">Profile letter</span>
+            <input
+              id="profileLetterInput"
+              type="text"
+              maxlength="1"
+              placeholder="P"
+            />
+          </label>
+
+          <div class="actions">
+            <button class="primary" id="saveSettingsButton" type="button">Save Settings</button>
+          </div>
+
+          <div id="message" class="message"></div>
+        </div>
+
+        <div class="panel settings-preview-panel">
+          <div class="note-card settings-preview-card">
+            <div class="profile-circle profile-circle-large" id="settingsPreviewLetter">P</div>
+            <h2 id="settingsPreviewName">Player Preview</h2>
+            <p class="muted">This preview shows how your home page theme and profile letter will look.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
