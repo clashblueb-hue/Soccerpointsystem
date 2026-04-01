@@ -106,10 +106,15 @@ function initHomePage() {
   const adminHome = document.getElementById("adminHome");
   const leaderboardList = document.getElementById("leaderboardList");
   const userList = document.getElementById("userList");
+  const shopAdminList = document.getElementById("shopAdminList");
   const logList = document.getElementById("logList");
   const shopButton = document.getElementById("shopButton");
   const wheelButton = document.getElementById("wheelButton");
   const logoutButton = document.getElementById("logoutButton");
+  const newShopName = document.getElementById("newShopName");
+  const newShopCost = document.getElementById("newShopCost");
+  const newShopCategory = document.getElementById("newShopCategory");
+  const createShopItemButton = document.getElementById("createShopItemButton");
 
   let user = null;
 
@@ -179,6 +184,83 @@ function initHomePage() {
   }
 
   window.deleteUser = deleteUser;
+
+  async function saveShopItem(itemId) {
+    clearMessage(message);
+    const costInput = document.getElementById(`shop-cost-${itemId}`);
+    const nameInput = document.getElementById(`shop-name-${itemId}`);
+    const categoryInput = document.getElementById(`shop-category-${itemId}`);
+    const outOfStockInput = document.getElementById(`shop-stock-${itemId}`);
+    const stockNoteInput = document.getElementById(`shop-note-${itemId}`);
+
+    try {
+      const data = await api("/api/shop/update", {
+        method: "POST",
+        body: JSON.stringify({
+          itemId,
+          name: nameInput.value,
+          cost: Number(costInput.value),
+          category: categoryInput.value,
+          outOfStock: outOfStockInput.checked,
+          stockNote: stockNoteInput.value,
+        }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.saveShopItem = saveShopItem;
+
+  async function createShopItem() {
+    clearMessage(message);
+
+    try {
+      const data = await api("/api/shop/create", {
+        method: "POST",
+        body: JSON.stringify({
+          name: newShopName.value,
+          cost: Number(newShopCost.value),
+          category: newShopCategory.value,
+        }),
+      });
+
+      newShopName.value = "";
+      newShopCost.value = "10";
+      newShopCategory.value = "reward";
+      setMessage(message, data.message);
+      await loadPage();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.createShopItem = createShopItem;
+
+  async function deleteShopItem(itemId, itemName) {
+    clearMessage(message);
+
+    if (!window.confirm(`Delete the shop item "${itemName}"?`)) {
+      return;
+    }
+
+    try {
+      const data = await api("/api/shop/delete", {
+        method: "POST",
+        body: JSON.stringify({ itemId }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.deleteShopItem = deleteShopItem;
 
   function renderAdminLists(users, logs) {
     userList.innerHTML = users.length
@@ -254,6 +336,68 @@ function initHomePage() {
       : `<div class="empty">No players are on the leaderboard yet.</div>`;
   }
 
+  function renderShopManager(items) {
+    shopAdminList.innerHTML = items.length
+      ? items
+          .map(
+            (item) => `
+              <article class="user-card">
+                <div class="row">
+                  <div>
+                    <h3>${escapeHtml(item.name)}</h3>
+                    <div class="role">${escapeHtml(item.category)}</div>
+                  </div>
+                  <div class="points">${item.cost} pts</div>
+                </div>
+                <div class="shop-admin-grid">
+                  <label class="stack">
+                    <span class="muted">Item name</span>
+                    <input id="shop-name-${item.id}" type="text" value="${escapeHtml(item.name)}" />
+                  </label>
+                  <label class="stack">
+                    <span class="muted">Price</span>
+                    <input id="shop-cost-${item.id}" type="number" min="0" step="1" value="${item.cost}" />
+                  </label>
+                  <label class="stack">
+                    <span class="muted">Type</span>
+                    <select id="shop-category-${item.id}">
+                      <option value="reward" ${item.category === "reward" ? "selected" : ""}>Reward</option>
+                      <option value="snack" ${item.category === "snack" ? "selected" : ""}>Snack</option>
+                    </select>
+                  </label>
+                  <label class="stack checkbox-stack">
+                    <span class="muted">Stock status</span>
+                    <label class="toggle-row">
+                      <input id="shop-stock-${item.id}" type="checkbox" ${item.outOfStock ? "checked" : ""} />
+                      <span>Mark out of stock</span>
+                    </label>
+                  </label>
+                  <label class="stack">
+                    <span class="muted">Player message</span>
+                    <input
+                      id="shop-note-${item.id}"
+                      type="text"
+                      placeholder="Out of stock"
+                      value="${escapeHtml(item.stockNote || "")}"
+                    />
+                  </label>
+                </div>
+                <div class="actions">
+                  <button class="secondary" onclick="saveShopItem(${item.id})">Save Item</button>
+                  <button
+                    class="danger"
+                    onclick="deleteShopItem(${item.id}, decodeURIComponent('${encodeURIComponent(item.name)}'))"
+                  >
+                    Delete Item
+                  </button>
+                </div>
+              </article>
+            `
+          )
+          .join("")
+      : `<div class="empty">No shop items found yet.</div>`;
+  }
+
   async function loadPage() {
     user = await getCurrentUser();
     renderUserShell();
@@ -262,16 +406,22 @@ function initHomePage() {
     renderLeaderboard(leaderboardData.leaderboard);
 
     if (user.role === "admin") {
-      const [usersData, logsData] = await Promise.all([
+      const [usersData, logsData, shopData] = await Promise.all([
         api("/api/users", { method: "GET" }),
         api("/api/redemptions", { method: "GET" }),
+        api("/api/shop", { method: "GET" }),
       ]);
       renderAdminLists(usersData.users, logsData.logs);
+      renderShopManager(shopData.items);
     }
   }
 
   logoutButton.addEventListener("click", () => {
     logout();
+  });
+
+  createShopItemButton.addEventListener("click", () => {
+    createShopItem();
   });
 
   shopButton.addEventListener("click", () => {
@@ -307,6 +457,7 @@ function initShopPage() {
   const pointsValue = document.getElementById("pointsValue");
   const shopGrid = document.getElementById("shopGrid");
   const logoutButton = document.getElementById("logoutButton");
+  let refreshTimer = null;
 
   let user = null;
 
@@ -346,16 +497,21 @@ function initShopPage() {
           <div class="shop-top">
             <div>
               <h3>${escapeHtml(item.name)}</h3>
-              <p class="muted">Redeem this reward from your point balance.</p>
+              <p class="muted">${escapeHtml(item.stockNote || "Redeem this reward from your point balance.")}</p>
             </div>
             <div class="cost">${item.cost} pts</div>
           </div>
+          ${
+            item.outOfStock
+              ? `<div class="stock-tag">Out of stock</div>`
+              : ""
+          }
           <button
             class="primary"
             onclick="redeem(${item.id})"
-            ${user.points < item.cost ? "disabled" : ""}
+            ${user.points < item.cost || item.outOfStock ? "disabled" : ""}
           >
-            Redeem
+            ${item.outOfStock ? "Unavailable" : "Redeem"}
           </button>
         </article>
       `
@@ -380,14 +536,14 @@ function initShopPage() {
                     <div class="snack-option">
                       <div>
                         <strong>${escapeHtml(item.name)}</strong>
-                        <div class="muted">${item.cost} points</div>
+                        <div class="muted">${item.outOfStock ? escapeHtml(item.stockNote || "Out of stock") : `${item.cost} points`}</div>
                       </div>
                       <button
                         class="secondary"
                         onclick="redeem(${item.id})"
-                        ${user.points < item.cost ? "disabled" : ""}
+                        ${user.points < item.cost || item.outOfStock ? "disabled" : ""}
                       >
-                        Redeem
+                        ${item.outOfStock ? "Unavailable" : "Redeem"}
                       </button>
                     </div>
                   `
@@ -417,6 +573,9 @@ function initShopPage() {
   }
 
   logoutButton.addEventListener("click", () => {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+    }
     logout();
   });
 
@@ -426,6 +585,10 @@ function initShopPage() {
       window.location.href = "/index.html";
     }, 1000);
   });
+
+  refreshTimer = setInterval(() => {
+    loadPage().catch(() => {});
+  }, 10000);
 }
 
 function initWheelPage() {
@@ -559,3 +722,4 @@ document.addEventListener("DOMContentLoaded", () => {
     initWheelPage();
   }
 });
+
