@@ -56,7 +56,7 @@ async function api(path, options = {}) {
     try {
       data = JSON.parse(raw);
     } catch (error) {
-      throw new Error("The server sent an invalid response.");
+      throw new Error(`The server sent an invalid response for ${path}.`);
     }
   }
 
@@ -68,12 +68,12 @@ async function api(path, options = {}) {
 }
 
 async function getCurrentUser() {
-  const data = await api("/me", { method: "GET" });
+  const data = await api("/api/me", { method: "GET" });
   return data.user;
 }
 
 async function logout() {
-  await fetch("/logout", { method: "POST", credentials: "same-origin" });
+  await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
   window.location.href = "/index.html";
 }
 
@@ -141,7 +141,7 @@ function initHomePage() {
     clearMessage(message);
 
     try {
-      const data = await api("/points", {
+      const data = await api("/api/points", {
         method: "POST",
         body: JSON.stringify({ username, amount }),
       });
@@ -228,13 +228,13 @@ function initHomePage() {
     user = await getCurrentUser();
     renderUserShell();
 
-    const leaderboardData = await api("/leaderboard", { method: "GET" });
+    const leaderboardData = await api("/api/leaderboard", { method: "GET" });
     renderLeaderboard(leaderboardData.leaderboard);
 
     if (user.role === "admin") {
       const [usersData, logsData] = await Promise.all([
-        api("/users", { method: "GET" }),
-        api("/redemptions", { method: "GET" }),
+        api("/api/users", { method: "GET" }),
+        api("/api/redemptions", { method: "GET" }),
       ]);
       renderAdminLists(usersData.users, logsData.logs);
     }
@@ -281,7 +281,7 @@ function initShopPage() {
     clearMessage(message);
 
     try {
-      const data = await api("/redeem", {
+      const data = await api("/api/redeem", {
         method: "POST",
         body: JSON.stringify({ itemId }),
       });
@@ -373,7 +373,7 @@ function initShopPage() {
     }
 
     renderHeader();
-    const data = await api("/shop", { method: "GET" });
+    const data = await api("/api/shop", { method: "GET" });
     renderShop(data.items);
   }
 
