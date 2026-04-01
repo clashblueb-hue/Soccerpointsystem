@@ -3,6 +3,7 @@ const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 const DEFAULT_ADMIN_USERNAME = "admin1234";
 const DEFAULT_ADMIN_PASSWORD = "gamer@00";
 const PASSWORD_ITERATIONS = 100000;
+const WHEEL_OPTIONS = [-25, 25, -50, 50];
 
 let setupPromise = null;
 
@@ -71,6 +72,41 @@ async function routeRequest(request, env) {
     return json({
       success: true,
       users: users.map(normalizeUser),
+    });
+  }
+
+  if (route === "/users/delete" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const body = await request.json();
+    const username = String(body.username || "").trim();
+
+    if (!username) {
+      return json({ success: false, message: "Username is required" }, 400);
+    }
+
+    const target = await dbGet(
+      env,
+      "SELECT id, username, role FROM users WHERE username = ?",
+      [username]
+    );
+
+    if (!target) {
+      return json({ success: false, message: "User not found" }, 404);
+    }
+
+    if (target.role === "admin") {
+      return json(
+        { success: false, message: "Admin accounts cannot be deleted here" },
+        400
+      );
+    }
+
+    await dbRun(env, "DELETE FROM wheel_tickets WHERE user_id = ?", [target.id]);
+    await dbRun(env, "DELETE FROM users WHERE id = ?", [target.id]);
+
+    return json({
+      success: true,
+      message: `Deleted account ${target.username}`,
     });
   }
 
@@ -147,6 +183,142 @@ async function routeRequest(request, env) {
         cost: Number(item.cost),
         category: item.category,
       })),
+    });
+  }
+
+  if (route === "/wheel-status" && request.method === "GET") {
+    const user = await requireUser(request, env);
+
+    if (user.role === "admin") {
+      return json(
+        { success: false, message: "Admins cannot use the daily wheel" },
+        403
+      );
+    }
+
+    const ticketState = await getWheelTicketState(env, user.id);
+    return json({
+      success: true,
+      tickets: ticketState.tickets,
+      claimedToday: ticketState.last_claimed_date === getTorontoDateString(),
+      options: WHEEL_OPTIONS,
+    });
+  }
+
+  if (route === "/wheel-claim" && request.method === "POST") {
+    const user = await requireUser(request, env);
+
+    if (user.role === "admin") {
+      return json(
+        { success: false, message: "Admins cannot use the daily wheel" },
+        403
+      );
+    }
+
+    const today = getTorontoDateString();
+    const ticketState = await getWheelTicketState(env, user.id);
+
+    if (ticketState.last_claimed_date === today) {
+      return json(
+        { success: false, message: "You already claimed today's ticket" },
+        400
+      );
+    }
+
+    const nextTickets = ticketState.tickets + 1;
+    await dbRun(
+      env,
+      `INSERT INTO wheel_tickets (user_id, tickets, last_claimed_date)
+       VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         tickets = excluded.tickets,
+         last_claimed_date = excluded.last_claimed_date`,
+      [user.id, nextTickets, today]
+    );
+
+    return json({
+      success: true,
+      message: "You claimed 1 daily ticket",
+      tickets: nextTickets,
+      claimedToday: true,
+    });
+  }
+
+  if (route === "/wheel-spin" && request.method === "POST") {
+    const user = await requireUser(request, env);
+
+    if (user.role === "admin") {
+      return json(
+        { success: false, message: "Admins cannot use the daily wheel" },
+        403
+      );
+    }
+
+    const body = await request.json();
+    const betAmount = Number(body.betAmount);
+
+    if (!Number.isInteger(betAmount) || betAmount <= 0) {
+      return json(
+        { success: false, message: "Bet amount must be a whole number above 0" },
+        400
+      );
+    }
+
+    const freshUser = await dbGet(
+      env,
+      "SELECT id, username, role, points FROM users WHERE id = ?",
+      [user.id]
+    );
+    const ticketState = await getWheelTicketState(env, user.id);
+
+    if (ticketState.tickets < 1) {
+      return json(
+        { success: false, message: "Claim your daily ticket before spinning" },
+        400
+      );
+    }
+
+    if (Number(freshUser.points) < betAmount) {
+      return json(
+        { success: false, message: "You do not have enough points for that bet" },
+        400
+      );
+    }
+
+    const optionIndex = crypto.getRandomValues(new Uint32Array(1))[0] % WHEEL_OPTIONS.length;
+    const percent = WHEEL_OPTIONS[optionIndex];
+    const magnitude = Math.max(
+      1,
+      Math.round((betAmount * Math.abs(percent)) / 100)
+    );
+    const pointChange = percent > 0 ? magnitude : -magnitude;
+    const nextPoints = Number(freshUser.points) + pointChange;
+    const nextTickets = ticketState.tickets - 1;
+
+    await dbRun(env, "UPDATE users SET points = ? WHERE id = ?", [
+      nextPoints,
+      freshUser.id,
+    ]);
+    await dbRun(env, "UPDATE wheel_tickets SET tickets = ? WHERE user_id = ?", [
+      nextTickets,
+      freshUser.id,
+    ]);
+
+    return json({
+      success: true,
+      message: `Wheel result: ${formatWheelLabel(percent)}`,
+      result: {
+        index: optionIndex,
+        percent,
+        label: formatWheelLabel(percent),
+        betAmount,
+        pointChange,
+      },
+      tickets: nextTickets,
+      user: {
+        ...normalizeUser(freshUser),
+        points: nextPoints,
+      },
     });
   }
 
@@ -269,6 +441,16 @@ async function setupDatabase(env) {
       item TEXT NOT NULL,
       cost INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`
+  );
+
+  await dbRun(
+    env,
+    `CREATE TABLE IF NOT EXISTS wheel_tickets (
+      user_id INTEGER PRIMARY KEY,
+      tickets INTEGER NOT NULL DEFAULT 0,
+      last_claimed_date TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`
   );
 
@@ -485,6 +667,32 @@ function normalizeUser(user) {
   };
 }
 
+async function getWheelTicketState(env, userId) {
+  const ticketState = await dbGet(
+    env,
+    "SELECT tickets, last_claimed_date FROM wheel_tickets WHERE user_id = ?",
+    [userId]
+  );
+
+  if (ticketState) {
+    return {
+      tickets: Number(ticketState.tickets),
+      last_claimed_date: ticketState.last_claimed_date || "",
+    };
+  }
+
+  await dbRun(
+    env,
+    "INSERT INTO wheel_tickets (user_id, tickets, last_claimed_date) VALUES (?, 0, NULL)",
+    [userId]
+  );
+
+  return {
+    tickets: 0,
+    last_claimed_date: "",
+  };
+}
+
 async function dbRun(env, sql, params = []) {
   return env.DB.prepare(sql).bind(...params).run();
 }
@@ -610,6 +818,24 @@ function base64UrlDecode(value) {
   const padded = normalized + "===".slice((normalized.length + 3) % 4);
   const binary = atob(padded);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function getTorontoDateString() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((part) => part.type === "year")?.value || "0000";
+  const month = parts.find((part) => part.type === "month")?.value || "00";
+  const day = parts.find((part) => part.type === "day")?.value || "00";
+  return `${year}-${month}-${day}`;
+}
+
+function formatWheelLabel(percent) {
+  return `${percent > 0 ? "+" : ""}${percent}%`;
 }
 
 function withStatus(message, status) {
