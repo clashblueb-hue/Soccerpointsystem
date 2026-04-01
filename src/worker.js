@@ -173,7 +173,9 @@ async function routeRequest(request, env) {
     await requireUser(request, env);
     const items = await dbAll(
       env,
-      "SELECT id, name, cost, category FROM shop ORDER BY category ASC, cost ASC, name ASC"
+      `SELECT id, name, cost, category, out_of_stock, stock_note
+       FROM shop
+       ORDER BY category ASC, cost ASC, name ASC`
     );
     return json({
       success: true,
@@ -182,7 +184,120 @@ async function routeRequest(request, env) {
         name: item.name,
         cost: Number(item.cost),
         category: item.category,
+        outOfStock: Boolean(Number(item.out_of_stock)),
+        stockNote: item.stock_note || "",
       })),
+    });
+  }
+
+  if (route === "/shop/update" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const body = await request.json();
+    const itemId = Number(body.itemId);
+    const name = String(body.name || "").trim();
+    const cost = Number(body.cost);
+    const category = normalizeShopCategory(body.category);
+    const outOfStock = Boolean(body.outOfStock);
+    const stockNote = String(body.stockNote || "").trim();
+
+    if (!name || Number.isNaN(itemId) || Number.isNaN(cost) || cost < 0) {
+      return json(
+        { success: false, message: "Item name and price are required" },
+        400
+      );
+    }
+
+    const item = await dbGet(
+      env,
+      "SELECT id, name FROM shop WHERE id = ?",
+      [itemId]
+    );
+
+    if (!item) {
+      return json({ success: false, message: "Item not found" }, 404);
+    }
+
+    const nextNote = outOfStock ? stockNote || "Out of stock" : "";
+    try {
+      await dbRun(
+        env,
+        `UPDATE shop
+         SET name = ?, cost = ?, category = ?, out_of_stock = ?, stock_note = ?
+         WHERE id = ?`,
+        [name, Math.round(cost), category, outOfStock ? 1 : 0, nextNote, itemId]
+      );
+    } catch (error) {
+      if (String(error.message || "").includes("UNIQUE")) {
+        return json(
+          { success: false, message: "That shop item name is already in use" },
+          409
+        );
+      }
+      throw error;
+    }
+
+    return json({
+      success: true,
+      message: `Updated ${name}`,
+    });
+  }
+
+  if (route === "/shop/create" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const body = await request.json();
+    const name = String(body.name || "").trim();
+    const cost = Number(body.cost);
+    const category = normalizeShopCategory(body.category);
+
+    if (!name || Number.isNaN(cost) || cost < 0) {
+      return json(
+        { success: false, message: "Item name and price are required" },
+        400
+      );
+    }
+
+    try {
+      await dbRun(
+        env,
+        `INSERT INTO shop (name, cost, category, out_of_stock, stock_note)
+         VALUES (?, ?, ?, 0, '')`,
+        [name, Math.round(cost), category]
+      );
+    } catch (error) {
+      if (String(error.message || "").includes("UNIQUE")) {
+        return json(
+          { success: false, message: "That shop item already exists" },
+          409
+        );
+      }
+      throw error;
+    }
+
+    return json({
+      success: true,
+      message: `Added ${name} to the shop`,
+    });
+  }
+
+  if (route === "/shop/delete" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const body = await request.json();
+    const itemId = Number(body.itemId);
+
+    if (Number.isNaN(itemId)) {
+      return json({ success: false, message: "A valid item is required" }, 400);
+    }
+
+    const item = await dbGet(env, "SELECT id, name FROM shop WHERE id = ?", [itemId]);
+    if (!item) {
+      return json({ success: false, message: "Item not found" }, 404);
+    }
+
+    await dbRun(env, "DELETE FROM shop WHERE id = ?", [itemId]);
+
+    return json({
+      success: true,
+      message: `Deleted ${item.name}`,
     });
   }
 
@@ -331,15 +446,25 @@ async function routeRequest(request, env) {
       return json({ success: false, message: "A valid item is required" }, 400);
     }
 
-    const item = await dbGet(
-      env,
-      "SELECT id, name, cost FROM shop WHERE id = ?",
-      [itemId]
-    );
+      const item = await dbGet(
+        env,
+        "SELECT id, name, cost, out_of_stock, stock_note FROM shop WHERE id = ?",
+        [itemId]
+      );
 
-    if (!item) {
-      return json({ success: false, message: "Item not found" }, 404);
-    }
+      if (!item) {
+        return json({ success: false, message: "Item not found" }, 404);
+      }
+
+      if (Number(item.out_of_stock) === 1) {
+        return json(
+          {
+            success: false,
+            message: item.stock_note || "This item is out of stock",
+          },
+          400
+        );
+      }
 
     const freshUser = await dbGet(
       env,
@@ -429,9 +554,21 @@ async function setupDatabase(env) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
       cost INTEGER NOT NULL,
-      category TEXT NOT NULL DEFAULT 'reward'
+      category TEXT NOT NULL DEFAULT 'reward',
+      out_of_stock INTEGER NOT NULL DEFAULT 0,
+      stock_note TEXT NOT NULL DEFAULT ''
     )`
   );
+
+  await dbRun(
+    env,
+    "ALTER TABLE shop ADD COLUMN out_of_stock INTEGER NOT NULL DEFAULT 0"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    "ALTER TABLE shop ADD COLUMN stock_note TEXT NOT NULL DEFAULT ''"
+  ).catch(() => {});
 
   await dbRun(
     env,
@@ -836,6 +973,10 @@ function getTorontoDateString() {
 
 function formatWheelLabel(percent) {
   return `${percent > 0 ? "+" : ""}${percent}%`;
+}
+
+function normalizeShopCategory(value) {
+  return String(value || "").trim().toLowerCase() === "snack" ? "snack" : "reward";
 }
 
 function withStatus(message, status) {
