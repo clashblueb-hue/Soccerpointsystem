@@ -2,7 +2,7 @@ const SESSION_COOKIE = "soccer_points_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 const DEFAULT_ADMIN_USERNAME = "admin1234";
 const DEFAULT_ADMIN_PASSWORD = "gamer@00";
-const PASSWORD_ITERATIONS = 150000;
+const PASSWORD_ITERATIONS = 100000;
 
 let setupPromise = null;
 
