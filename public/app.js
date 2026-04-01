@@ -232,6 +232,8 @@ function initHomePage() {
   const userList = document.getElementById("userList");
   const shopAdminList = document.getElementById("shopAdminList");
   const logList = document.getElementById("logList");
+  const adminTabs = Array.from(document.querySelectorAll(".admin-tab"));
+  const adminPanels = Array.from(document.querySelectorAll(".admin-tab-panel"));
   const shopButton = document.getElementById("shopButton");
   const wheelButton = document.getElementById("wheelButton");
   const settingsButton = document.getElementById("settingsButton");
@@ -247,6 +249,19 @@ function initHomePage() {
   );
 
   let user = null;
+
+  function activateAdminTab(tabName) {
+    adminTabs.forEach((tab) => {
+      const active = tab.dataset.adminTab === tabName;
+      tab.classList.toggle("is-active", active);
+      tab.classList.toggle("secondary", active);
+      tab.classList.toggle("ghost", !active);
+    });
+
+    adminPanels.forEach((panel) => {
+      panel.classList.toggle("hidden", panel.dataset.adminPanel !== tabName);
+    });
+  }
 
   function renderUserShell() {
     heroTitle.textContent = `Welcome, ${user.username}`;
@@ -396,6 +411,25 @@ function initHomePage() {
 
   window.deleteShopItem = deleteShopItem;
 
+  async function preserveRedemption(redemptionId) {
+    clearMessage(message);
+
+    try {
+      const data = await api("/api/redemptions/preserve", {
+        method: "POST",
+        body: JSON.stringify({ redemptionId }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+      activateAdminTab("purchases");
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.preserveRedemption = preserveRedemption;
+
   async function saveWheelConfig() {
     clearMessage(message);
 
@@ -459,7 +493,21 @@ function initHomePage() {
                   </div>
                   <div class="points">-${log.cost} pts</div>
                 </div>
-                <div class="muted">${new Date(log.created_at).toLocaleString()}</div>
+                <div class="muted">Bought: ${new Date(log.created_at).toLocaleString()}</div>
+                <div class="muted">
+                  ${
+                    log.keepForever
+                      ? "Will stay in the log"
+                      : `Deletes at: ${new Date(log.expires_at).toLocaleString()}`
+                  }
+                </div>
+                <div class="actions">
+                  ${
+                    log.keepForever
+                      ? `<span class="stock-tag">Do Not Delete</span>`
+                      : `<button class="secondary" onclick="preserveRedemption(${log.id})">Do Not Delete</button>`
+                  }
+                </div>
               </article>
             `
           )
@@ -560,6 +608,7 @@ function initHomePage() {
     renderLeaderboard(leaderboardData.leaderboard);
 
     if (user.role === "admin") {
+      activateAdminTab("players");
       const [usersData, logsData, shopData, wheelData] = await Promise.all([
         api("/api/users", { method: "GET" }),
         api("/api/redemptions", { method: "GET" }),
@@ -586,6 +635,12 @@ function initHomePage() {
 
   saveWheelConfigButton.addEventListener("click", () => {
     saveWheelConfig();
+  });
+
+  adminTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      activateAdminTab(tab.dataset.adminTab);
+    });
   });
 
   shopButton.addEventListener("click", () => {
