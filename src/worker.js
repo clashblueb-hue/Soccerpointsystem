@@ -62,6 +62,37 @@ async function routeRequest(request, env) {
     return json({ success: true, user });
   }
 
+  if (route === "/settings" && request.method === "GET") {
+    const user = await requireUser(request, env);
+    return json({ success: true, settings: buildUserSettings(user) });
+  }
+
+  if (route === "/settings" && request.method === "POST") {
+    const user = await requireUser(request, env);
+    const body = await request.json();
+    const theme = normalizeTheme(body.theme);
+    const profileLetter = normalizeProfileLetter(body.profileLetter);
+
+    await dbRun(
+      env,
+      "UPDATE users SET theme = ?, profile_letter = ? WHERE id = ?",
+      [theme, profileLetter, user.id]
+    );
+
+    const updatedUser = await dbGet(
+      env,
+      "SELECT id, username, role, points, theme, profile_letter FROM users WHERE id = ?",
+      [user.id]
+    );
+
+    return json({
+      success: true,
+      message: "Saved your player settings",
+      user: normalizeUser(updatedUser),
+      settings: buildUserSettings(updatedUser),
+    });
+  }
+
   if (route === "/users" && request.method === "GET") {
     const user = await requireAdmin(request, env);
     void user;
@@ -544,9 +575,21 @@ async function setupDatabase(env) {
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'player',
-      points INTEGER NOT NULL DEFAULT 0
+      points INTEGER NOT NULL DEFAULT 0,
+      theme TEXT NOT NULL DEFAULT 'default',
+      profile_letter TEXT NOT NULL DEFAULT ''
     )`
   );
+
+  await dbRun(
+    env,
+    "ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'default'"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    "ALTER TABLE users ADD COLUMN profile_letter TEXT NOT NULL DEFAULT ''"
+  ).catch(() => {});
 
   await dbRun(
     env,
@@ -801,6 +844,17 @@ function normalizeUser(user) {
     username: user.username,
     role: user.role,
     points: Number(user.points),
+    theme: normalizeTheme(user.theme),
+    profileLetter: normalizeProfileLetter(user.profile_letter, user.username),
+  };
+}
+
+function buildUserSettings(user) {
+  const normalized = normalizeUser(user);
+  return {
+    theme: normalized.theme,
+    profileLetter: normalized.profileLetter,
+    themeOptions: ["default", "sunset", "forest", "ocean"],
   };
 }
 
@@ -977,6 +1031,20 @@ function formatWheelLabel(percent) {
 
 function normalizeShopCategory(value) {
   return String(value || "").trim().toLowerCase() === "snack" ? "snack" : "reward";
+}
+
+function normalizeTheme(value) {
+  const theme = String(value || "").trim().toLowerCase();
+  if (["sunset", "forest", "ocean"].includes(theme)) {
+    return theme;
+  }
+  return "default";
+}
+
+function normalizeProfileLetter(value, username = "") {
+  const source = String(value || "").trim() || String(username || "").trim();
+  const first = source.charAt(0).toUpperCase();
+  return /^[A-Z0-9]$/.test(first) ? first : "P";
 }
 
 function withStatus(message, status) {
