@@ -32,6 +32,10 @@ function clearMessage(element) {
   element.className = "message";
 }
 
+function applyTheme(theme) {
+  document.body.dataset.theme = theme || "default";
+}
+
 async function api(path, options = {}) {
   const headers = {
     ...(options.body ? { "Content-Type": "application/json" } : {}),
@@ -110,7 +114,9 @@ function initHomePage() {
   const logList = document.getElementById("logList");
   const shopButton = document.getElementById("shopButton");
   const wheelButton = document.getElementById("wheelButton");
+  const settingsButton = document.getElementById("settingsButton");
   const logoutButton = document.getElementById("logoutButton");
+  const profileLetterBadge = document.getElementById("profileLetterBadge");
   const newShopName = document.getElementById("newShopName");
   const newShopCost = document.getElementById("newShopCost");
   const newShopCategory = document.getElementById("newShopCategory");
@@ -124,6 +130,7 @@ function initHomePage() {
     roleValue.textContent =
       user.role.charAt(0).toUpperCase() + user.role.slice(1);
     pointsValue.textContent = user.points;
+    applyTheme(user.theme);
 
     if (user.role === "admin") {
       heroText.textContent =
@@ -133,6 +140,7 @@ function initHomePage() {
       playerHome.classList.add("hidden");
       adminHome.classList.remove("hidden");
       wheelButton.classList.add("hidden");
+      settingsButton.classList.add("hidden");
       return;
     }
 
@@ -143,6 +151,8 @@ function initHomePage() {
     playerHome.classList.remove("hidden");
     adminHome.classList.add("hidden");
     wheelButton.classList.remove("hidden");
+    settingsButton.classList.remove("hidden");
+    profileLetterBadge.textContent = user.profileLetter || "P";
   }
 
   async function adjustPoints(username, amount) {
@@ -442,6 +452,15 @@ function initHomePage() {
     window.location.href = "/wheel.html";
   });
 
+  settingsButton.addEventListener("click", () => {
+    if (user && user.role === "admin") {
+      setMessage(message, "Admins do not use the player settings page.", "error");
+      return;
+    }
+
+    window.location.href = "/settings.html";
+  });
+
   loadPage().catch((error) => {
     setMessage(message, error.message || "Please log in first.", "error");
     setTimeout(() => {
@@ -700,6 +719,83 @@ function initWheelPage() {
   });
 }
 
+function initSettingsPage() {
+  const message = document.getElementById("message");
+  const themeSelect = document.getElementById("themeSelect");
+  const profileLetterInput = document.getElementById("profileLetterInput");
+  const saveSettingsButton = document.getElementById("saveSettingsButton");
+  const settingsPreviewLetter = document.getElementById("settingsPreviewLetter");
+  const settingsPreviewName = document.getElementById("settingsPreviewName");
+  const logoutButton = document.getElementById("logoutButton");
+
+  let user = null;
+
+  function syncPreview() {
+    const letter = String(profileLetterInput.value || user.profileLetter || user.username || "P")
+      .trim()
+      .charAt(0)
+      .toUpperCase() || "P";
+    settingsPreviewLetter.textContent = letter;
+    applyTheme(themeSelect.value);
+  }
+
+  async function loadSettings() {
+    user = await getCurrentUser();
+    if (user.role === "admin") {
+      window.location.href = "/home.html";
+      return;
+    }
+
+    const data = await api("/api/settings", { method: "GET" });
+    themeSelect.value = data.settings.theme;
+    profileLetterInput.value = data.settings.profileLetter;
+    settingsPreviewName.textContent = `${user.username}'s Preview`;
+    syncPreview();
+  }
+
+  async function saveSettings() {
+    clearMessage(message);
+
+    try {
+      const data = await api("/api/settings", {
+        method: "POST",
+        body: JSON.stringify({
+          theme: themeSelect.value,
+          profileLetter: profileLetterInput.value,
+        }),
+      });
+
+      user = data.user;
+      themeSelect.value = data.settings.theme;
+      profileLetterInput.value = data.settings.profileLetter;
+      syncPreview();
+      setMessage(message, data.message);
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  themeSelect.addEventListener("change", syncPreview);
+  profileLetterInput.addEventListener("input", () => {
+    profileLetterInput.value = String(profileLetterInput.value || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 1);
+    syncPreview();
+  });
+  saveSettingsButton.addEventListener("click", saveSettings);
+  logoutButton.addEventListener("click", () => {
+    logout();
+  });
+
+  loadSettings().catch((error) => {
+    setMessage(message, error.message || "Please log in first.", "error");
+    setTimeout(() => {
+      window.location.href = "/index.html";
+    }, 1000);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const page = document.body.dataset.page;
 
@@ -720,6 +816,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (page === "wheel") {
     initWheelPage();
+    return;
+  }
+
+  if (page === "settings") {
+    initSettingsPage();
   }
 });
 
