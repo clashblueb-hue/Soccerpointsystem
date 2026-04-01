@@ -39,6 +39,10 @@
               <option value="sunset">Sunset</option>
               <option value="forest">Forest</option>
               <option value="ocean">Ocean</option>
+              <option value="aurora">Aurora</option>
+              <option value="midnight">Midnight</option>
+              <option value="rose">Rose</option>
+              <option value="ember">Ember</option>
             </select>
           </label>
 
@@ -52,7 +56,17 @@
             />
           </label>
 
+          <label class="stack">
+            <span class="muted">Click effect</span>
+            <select id="clickEffectSelect">
+              <option value="none">None</option>
+              <option value="fade">Fade</option>
+              <option value="snap">Snap</option>
+            </select>
+          </label>
+
           <div class="actions">
+            <button class="secondary" id="previewEffectButton" type="button">Test Effect</button>
             <button class="primary" id="saveSettingsButton" type="button">Save Settings</button>
           </div>
 
