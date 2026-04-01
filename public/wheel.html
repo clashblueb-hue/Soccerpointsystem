@@ -1,1 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Daily Wheel</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="wheel">
+    <div class="page">
+      <!-- Players claim one daily ticket here and use it to spin for point changes. -->
+      <section class="hero">
+        <span class="eyebrow">Daily Ticket Wheel</span>
+        <h1>Use one daily ticket to spin for more points.</h1>
+        <p class="muted">
+          The wheel can land on -25%, +25%, -50%, or +50% of your bet.
+        </p>
+        <div class="pill-row">
+          <div class="pill" id="wheelPlayerName">Player</div>
+          <div class="pill" id="wheelPlayerPoints">0 points</div>
+          <div class="pill" id="ticketCount">0 tickets</div>
+        </div>
+      </section>
+
+      <section class="grid wheel-layout">
+        <div class="panel stack">
+          <div class="panel-header">
+            <div>
+              <h2>Daily Ticket</h2>
+              <p class="muted">
+                Claim one ticket per day, then choose how many points to bet.
+              </p>
+            </div>
+            <div class="actions">
+              <a class="button-link ghost" href="/home.html">Back to Home</a>
+              <a class="button-link ghost" href="/shop.html">Open Shop</a>
+              <button class="ghost" id="logoutButton" type="button">Logout</button>
+            </div>
+          </div>
+
+          <div class="stats">
+            <article class="stat-card">
+              <div class="muted">Current points</div>
+              <div class="stat-value" id="wheelPointsValue">0</div>
+            </article>
+            <article class="stat-card">
+              <div class="muted">Tickets ready</div>
+              <div class="stat-value" id="wheelTicketsValue">0</div>
+            </article>
+            <article class="note-card">
+              <div class="muted">Today</div>
+              <p id="claimStatusText">Checking your daily ticket...</p>
+            </article>
+          </div>
+
+          <div class="stack">
+            <button class="secondary" id="claimTicketButton" type="button">
+              Claim Daily Ticket
+            </button>
+            <label class="stack" for="betAmount">
+              <span class="muted">Bet amount</span>
+              <input id="betAmount" type="number" min="1" step="1" value="10" />
+            </label>
+            <button class="primary" id="spinButton" type="button">Spin Wheel</button>
+          </div>
+
+          <div id="message" class="message"></div>
+        </div>
+
+        <div class="panel wheel-panel">
+          <div class="wheel-stage">
+            <div class="wheel-pointer"></div>
+            <div id="wheelDisc" class="wheel-disc">
+              <div class="wheel-center">Spin</div>
+            </div>
+          </div>
+          <div class="wheel-legend">
+            <div class="wheel-chip loss">-25%</div>
+            <div class="wheel-chip gain">+25%</div>
+            <div class="wheel-chip loss">-50%</div>
+            <div class="wheel-chip gain">+50%</div>
+          </div>
+          <div class="note-card">
+            <div class="muted">Last result</div>
+            <p id="wheelResultText">No spin yet today.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
 
