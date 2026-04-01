@@ -116,6 +116,16 @@ input {
   font-size: 0.98rem;
 }
 
+select {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
 button,
 .button-link {
   border: 0;
@@ -260,6 +270,39 @@ button:disabled {
   display: grid;
   gap: 10px;
   margin-top: 12px;
+}
+
+.shop-admin-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.checkbox-stack {
+  align-content: end;
+}
+
+.toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.toggle-row input {
+  width: auto;
+  margin: 0;
+}
+
+.stock-tag {
+  display: inline-flex;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.14);
+  color: #ffd6d6;
+  font-weight: 800;
 }
 
 .wheel-panel {
