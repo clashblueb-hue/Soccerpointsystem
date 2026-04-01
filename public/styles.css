@@ -420,6 +420,22 @@ button:disabled {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.admin-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.admin-tab {
+  min-width: 120px;
+}
+
+.admin-tab-panel {
+  display: grid;
+  gap: 12px;
+}
+
 .checkbox-stack {
   align-content: end;
 }
