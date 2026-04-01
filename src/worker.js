@@ -3,7 +3,7 @@ const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 const DEFAULT_ADMIN_USERNAME = "admin1234";
 const DEFAULT_ADMIN_PASSWORD = "gamer@00";
 const PASSWORD_ITERATIONS = 100000;
-const WHEEL_OPTIONS = [-25, 25, -50, 50];
+const DEFAULT_WHEEL_OPTIONS = [-25, 25, -50, 50];
 
 let setupPromise = null;
 
@@ -72,16 +72,19 @@ async function routeRequest(request, env) {
     const body = await request.json();
     const theme = normalizeTheme(body.theme);
     const profileLetter = normalizeProfileLetter(body.profileLetter);
+    const clickEffect = normalizeClickEffect(body.clickEffect);
 
     await dbRun(
       env,
-      "UPDATE users SET theme = ?, profile_letter = ? WHERE id = ?",
-      [theme, profileLetter, user.id]
+      "UPDATE users SET theme = ?, profile_letter = ?, click_effect = ? WHERE id = ?",
+      [theme, profileLetter, clickEffect, user.id]
     );
 
     const updatedUser = await dbGet(
       env,
-      "SELECT id, username, role, points, theme, profile_letter FROM users WHERE id = ?",
+      `SELECT id, username, role, points, theme, profile_letter, click_effect
+       FROM users
+       WHERE id = ?`,
       [user.id]
     );
 
@@ -343,11 +346,57 @@ async function routeRequest(request, env) {
     }
 
     const ticketState = await getWheelTicketState(env, user.id);
+    const options = await getWheelOptions(env);
     return json({
       success: true,
       tickets: ticketState.tickets,
       claimedToday: ticketState.last_claimed_date === getTorontoDateString(),
-      options: WHEEL_OPTIONS,
+      options,
+    });
+  }
+
+  if (route === "/wheel-config" && request.method === "GET") {
+    await requireAdmin(request, env);
+    const options = await getWheelOptions(env);
+    return json({
+      success: true,
+      options,
+    });
+  }
+
+  if (route === "/wheel-config" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const body = await request.json();
+    const rawOptions = Array.isArray(body.options) ? body.options : [];
+    const options = rawOptions.slice(0, 4).map((value) => Number(value));
+
+    if (
+      options.length !== 4 ||
+      options.some((value) => Number.isNaN(value) || !Number.isFinite(value) || value < -100 || value > 100)
+    ) {
+      return json(
+        {
+          success: false,
+          message: "Enter 4 wheel values between -100 and 100",
+        },
+        400
+      );
+    }
+
+    for (let index = 0; index < options.length; index += 1) {
+      await dbRun(
+        env,
+        `INSERT INTO wheel_config (slot_index, percent)
+         VALUES (?, ?)
+         ON CONFLICT(slot_index) DO UPDATE SET percent = excluded.percent`,
+        [index, Math.round(options[index])]
+      );
+    }
+
+    return json({
+      success: true,
+      message: "Updated the daily wheel",
+      options,
     });
   }
 
@@ -431,8 +480,9 @@ async function routeRequest(request, env) {
       );
     }
 
-    const optionIndex = crypto.getRandomValues(new Uint32Array(1))[0] % WHEEL_OPTIONS.length;
-    const percent = WHEEL_OPTIONS[optionIndex];
+    const options = await getWheelOptions(env);
+    const optionIndex = crypto.getRandomValues(new Uint32Array(1))[0] % options.length;
+    const percent = options[optionIndex];
     const magnitude = Math.max(
       1,
       Math.round((betAmount * Math.abs(percent)) / 100)
@@ -577,7 +627,8 @@ async function setupDatabase(env) {
       role TEXT NOT NULL DEFAULT 'player',
       points INTEGER NOT NULL DEFAULT 0,
       theme TEXT NOT NULL DEFAULT 'default',
-      profile_letter TEXT NOT NULL DEFAULT ''
+      profile_letter TEXT NOT NULL DEFAULT '',
+      click_effect TEXT NOT NULL DEFAULT 'none'
     )`
   );
 
@@ -589,6 +640,11 @@ async function setupDatabase(env) {
   await dbRun(
     env,
     "ALTER TABLE users ADD COLUMN profile_letter TEXT NOT NULL DEFAULT ''"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    "ALTER TABLE users ADD COLUMN click_effect TEXT NOT NULL DEFAULT 'none'"
   ).catch(() => {});
 
   await dbRun(
@@ -634,6 +690,14 @@ async function setupDatabase(env) {
     )`
   );
 
+  await dbRun(
+    env,
+    `CREATE TABLE IF NOT EXISTS wheel_config (
+      slot_index INTEGER PRIMARY KEY,
+      percent INTEGER NOT NULL
+    )`
+  );
+
   const adminUsername = env.ADMIN_USERNAME || DEFAULT_ADMIN_USERNAME;
   const adminPassword = env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
   const existingAdmin = await dbGet(
@@ -674,6 +738,17 @@ async function setupDatabase(env) {
         env,
         "INSERT INTO shop (name, cost, category) VALUES (?, ?, ?)",
         [name, cost, category]
+      );
+    }
+  }
+
+  const wheelCount = await dbGet(env, "SELECT COUNT(*) AS count FROM wheel_config");
+  if (Number(wheelCount.count) === 0) {
+    for (let index = 0; index < DEFAULT_WHEEL_OPTIONS.length; index += 1) {
+      await dbRun(
+        env,
+        "INSERT INTO wheel_config (slot_index, percent) VALUES (?, ?)",
+        [index, DEFAULT_WHEEL_OPTIONS[index]]
       );
     }
   }
@@ -797,7 +872,9 @@ async function getSessionUser(request, env) {
 
   const user = await dbGet(
     env,
-    "SELECT id, username, role, points FROM users WHERE id = ?",
+    `SELECT id, username, role, points, theme, profile_letter, click_effect
+     FROM users
+     WHERE id = ?`,
     [payload.id]
   );
 
@@ -846,6 +923,7 @@ function normalizeUser(user) {
     points: Number(user.points),
     theme: normalizeTheme(user.theme),
     profileLetter: normalizeProfileLetter(user.profile_letter, user.username),
+    clickEffect: normalizeClickEffect(user.click_effect),
   };
 }
 
@@ -854,7 +932,9 @@ function buildUserSettings(user) {
   return {
     theme: normalized.theme,
     profileLetter: normalized.profileLetter,
-    themeOptions: ["default", "sunset", "forest", "ocean"],
+    clickEffect: normalized.clickEffect,
+    themeOptions: ["default", "sunset", "forest", "ocean", "aurora", "midnight", "rose", "ember"],
+    clickEffectOptions: ["none", "fade", "snap"],
   };
 }
 
@@ -882,6 +962,19 @@ async function getWheelTicketState(env, userId) {
     tickets: 0,
     last_claimed_date: "",
   };
+}
+
+async function getWheelOptions(env) {
+  const rows = await dbAll(
+    env,
+    "SELECT slot_index, percent FROM wheel_config ORDER BY slot_index ASC"
+  );
+
+  if (rows.length === 4) {
+    return rows.map((row) => Number(row.percent));
+  }
+
+  return DEFAULT_WHEEL_OPTIONS.slice();
 }
 
 async function dbRun(env, sql, params = []) {
@@ -1035,10 +1128,18 @@ function normalizeShopCategory(value) {
 
 function normalizeTheme(value) {
   const theme = String(value || "").trim().toLowerCase();
-  if (["sunset", "forest", "ocean"].includes(theme)) {
+  if (["sunset", "forest", "ocean", "aurora", "midnight", "rose", "ember"].includes(theme)) {
     return theme;
   }
   return "default";
+}
+
+function normalizeClickEffect(value) {
+  const effect = String(value || "").trim().toLowerCase();
+  if (["fade", "snap"].includes(effect)) {
+    return effect;
+  }
+  return "none";
 }
 
 function normalizeProfileLetter(value, username = "") {
@@ -1061,3 +1162,4 @@ function json(body, status = 200) {
     },
   });
 }
+
