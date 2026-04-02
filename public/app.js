@@ -32,6 +32,11 @@ function clearMessage(element) {
   element.className = "message";
 }
 
+function formatSignedPoints(value) {
+  const amount = Number(value) || 0;
+  return `${amount >= 0 ? "+" : ""}${amount} pts`;
+}
+
 const PLAYER_STYLE_KEY = "player-style";
 
 function applyTheme(theme) {
@@ -231,9 +236,12 @@ function initHomePage() {
   const leaderboardList = document.getElementById("leaderboardList");
   const userList = document.getElementById("userList");
   const shopAdminList = document.getElementById("shopAdminList");
+  const wheelAdminList = document.getElementById("wheelAdminList");
   const logList = document.getElementById("logList");
   const adminTabs = Array.from(document.querySelectorAll(".admin-tab"));
   const adminPanels = Array.from(document.querySelectorAll(".admin-tab-panel"));
+  const playerTabs = Array.from(document.querySelectorAll(".player-tab"));
+  const playerPanels = Array.from(document.querySelectorAll(".player-tab-panel"));
   const shopButton = document.getElementById("shopButton");
   const wheelButton = document.getElementById("wheelButton");
   const settingsButton = document.getElementById("settingsButton");
@@ -244,13 +252,19 @@ function initHomePage() {
   const newShopCategory = document.getElementById("newShopCategory");
   const createShopItemButton = document.getElementById("createShopItemButton");
   const saveWheelConfigButton = document.getElementById("saveWheelConfigButton");
-  const wheelOptionInputs = [0, 1, 2, 3].map((index) =>
-    document.getElementById(`wheel-option-${index}`)
-  );
+  const requestRecipientSelect = document.getElementById("requestRecipientSelect");
+  const requestAmountInput = document.getElementById("requestAmountInput");
+  const sendRequestButton = document.getElementById("sendRequestButton");
+  const incomingRequestsList = document.getElementById("incomingRequestsList");
+  const outgoingRequestsList = document.getElementById("outgoingRequestsList");
 
   let user = null;
+  let currentAdminTab = "players";
+  let currentPlayerTab = "overview";
+  let playerRefreshTimer = null;
 
   function activateAdminTab(tabName) {
+    currentAdminTab = tabName;
     adminTabs.forEach((tab) => {
       const active = tab.dataset.adminTab === tabName;
       tab.classList.toggle("is-active", active);
@@ -260,6 +274,20 @@ function initHomePage() {
 
     adminPanels.forEach((panel) => {
       panel.classList.toggle("hidden", panel.dataset.adminPanel !== tabName);
+    });
+  }
+
+  function activatePlayerTab(tabName) {
+    currentPlayerTab = tabName;
+    playerTabs.forEach((tab) => {
+      const active = tab.dataset.playerTab === tabName;
+      tab.classList.toggle("is-active", active);
+      tab.classList.toggle("secondary", active);
+      tab.classList.toggle("ghost", !active);
+    });
+
+    playerPanels.forEach((panel) => {
+      panel.classList.toggle("hidden", panel.dataset.playerPanel !== tabName);
     });
   }
 
@@ -273,9 +301,9 @@ function initHomePage() {
 
     if (user.role === "admin") {
       heroText.textContent =
-        "You can manage player balances and review redemptions here.";
+        "You can manage players, the live shop, the slot machine, and purchases here.";
       nextStepText.textContent =
-        "Use the player cards below to add or remove points, or delete an extra player account.";
+        "Use the tabs below to manage balances, tune the slot machine, and clear finished purchases.";
       playerHome.classList.add("hidden");
       adminHome.classList.remove("hidden");
       wheelButton.classList.add("hidden");
@@ -284,9 +312,9 @@ function initHomePage() {
     }
 
     heroText.textContent =
-      "Open the shop when you want to spend the points you have earned.";
+      "Use the weekly slot machine, the shop, and player requests to manage your points.";
     nextStepText.textContent =
-      "Use the Open Shop button or Daily Wheel button to try to grow your points.";
+      "Open the Weekly Slot button on Mondays, or use Point Requests if you want to ask another player for help.";
     playerHome.classList.remove("hidden");
     adminHome.classList.add("hidden");
     wheelButton.classList.remove("hidden");
@@ -312,6 +340,22 @@ function initHomePage() {
 
   window.adjustPoints = adjustPoints;
 
+  async function adjustPointsFromMenu(username, direction) {
+    const select = document.getElementById(
+      `${direction}-points-${encodeURIComponent(username)}`
+    );
+    const rawValue = Number(select?.value || 0);
+    if (!rawValue) {
+      setMessage(message, "Choose a point amount first.", "error");
+      return;
+    }
+
+    const signedAmount = direction === "remove" ? -rawValue : rawValue;
+    await adjustPoints(username, signedAmount);
+  }
+
+  window.adjustPointsFromMenu = adjustPointsFromMenu;
+
   async function deleteUser(username) {
     clearMessage(message);
 
@@ -333,6 +377,33 @@ function initHomePage() {
   }
 
   window.deleteUser = deleteUser;
+
+  async function removeRedemption(redemptionId, isChecked) {
+    if (!isChecked) {
+      return;
+    }
+
+    clearMessage(message);
+
+    try {
+      const data = await api("/api/redemptions/delete", {
+        method: "POST",
+        body: JSON.stringify({ redemptionId }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+      activateAdminTab("purchases");
+    } catch (error) {
+      setMessage(message, error.message, "error");
+      const checkbox = document.getElementById(`redeem-check-${redemptionId}`);
+      if (checkbox) {
+        checkbox.checked = false;
+      }
+    }
+  }
+
+  window.removeRedemption = removeRedemption;
 
   async function saveShopItem(itemId) {
     clearMessage(message);
@@ -411,38 +482,65 @@ function initHomePage() {
 
   window.deleteShopItem = deleteShopItem;
 
-  async function preserveRedemption(redemptionId) {
+  async function sendPointRequest() {
     clearMessage(message);
 
     try {
-      const data = await api("/api/redemptions/preserve", {
+      const data = await api("/api/point-requests", {
         method: "POST",
-        body: JSON.stringify({ redemptionId }),
+        body: JSON.stringify({
+          recipientUsername: requestRecipientSelect.value,
+          amount: Number(requestAmountInput.value),
+        }),
       });
 
+      requestAmountInput.value = "10";
       setMessage(message, data.message);
       await loadPage();
-      activateAdminTab("purchases");
+      activatePlayerTab("requests");
     } catch (error) {
       setMessage(message, error.message, "error");
     }
   }
 
-  window.preserveRedemption = preserveRedemption;
-
-  async function saveWheelConfig() {
+  async function respondToPointRequest(requestId, action) {
     clearMessage(message);
 
     try {
-      const data = await api("/api/wheel-config", {
+      const data = await api("/api/point-requests/respond", {
         method: "POST",
-        body: JSON.stringify({
-          options: wheelOptionInputs.map((input) => Number(input.value)),
-        }),
+        body: JSON.stringify({ requestId, action }),
       });
 
       setMessage(message, data.message);
       await loadPage();
+      activatePlayerTab("requests");
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.sendPointRequest = sendPointRequest;
+  window.respondToPointRequest = respondToPointRequest;
+
+  async function saveWheelConfig() {
+    clearMessage(message);
+    const prizes = Array.from({ length: 8 }, (_, index) => ({
+      label: document.getElementById(`slot-label-${index}`)?.value || "",
+      pointChange: Number(document.getElementById(`slot-change-${index}`)?.value || 0),
+      weight: Number(document.getElementById(`slot-weight-${index}`)?.value || 0),
+      active: document.getElementById(`slot-active-${index}`)?.checked || false,
+    }));
+
+    try {
+      const data = await api("/api/wheel-config", {
+        method: "POST",
+        body: JSON.stringify({ prizes }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+      activateAdminTab("wheel");
     } catch (error) {
       setMessage(message, error.message, "error");
     }
@@ -464,11 +562,34 @@ function initHomePage() {
                   <div class="points">${entry.points} pts</div>
                 </div>
                 <div class="actions">
-                  <button class="secondary" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), 5)">+5</button>
-                  <button class="secondary" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), 10)">+10</button>
-                  <button class="secondary" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), 50)">+50</button>
-                  <button class="danger" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), -5)">-5</button>
-                  <button class="danger" onclick="adjustPoints(decodeURIComponent('${encodeURIComponent(entry.username)}'), -10)">-10</button>
+                  <div class="points-menu">
+                    <select id="add-points-${encodeURIComponent(entry.username)}">
+                      <option value="1">+1</option>
+                      <option value="5">+5</option>
+                      <option value="10" selected>+10</option>
+                      <option value="50">+50</option>
+                    </select>
+                    <button
+                      class="secondary"
+                      onclick="adjustPointsFromMenu(decodeURIComponent('${encodeURIComponent(entry.username)}'), 'add')"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div class="points-menu">
+                    <select id="remove-points-${encodeURIComponent(entry.username)}">
+                      <option value="1">-1</option>
+                      <option value="5" selected>-5</option>
+                      <option value="10">-10</option>
+                      <option value="50">-50</option>
+                    </select>
+                    <button
+                      class="danger"
+                      onclick="adjustPointsFromMenu(decodeURIComponent('${encodeURIComponent(entry.username)}'), 'remove')"
+                    >
+                      Remove
+                    </button>
+                  </div>
                   ${
                     entry.role === "admin"
                       ? ""
@@ -494,20 +615,10 @@ function initHomePage() {
                   <div class="points">-${log.cost} pts</div>
                 </div>
                 <div class="muted">Bought: ${new Date(log.created_at).toLocaleString()}</div>
-                <div class="muted">
-                  ${
-                    log.keepForever
-                      ? "Will stay in the log"
-                      : `Deletes at: ${new Date(log.expires_at).toLocaleString()}`
-                  }
-                </div>
-                <div class="actions">
-                  ${
-                    log.keepForever
-                      ? `<span class="stock-tag">Do Not Delete</span>`
-                      : `<button class="secondary" onclick="preserveRedemption(${log.id})">Do Not Delete</button>`
-                  }
-                </div>
+                <label class="toggle-row checklist-row">
+                  <input id="redeem-check-${log.id}" type="checkbox" onchange="removeRedemption(${log.id}, this.checked)" />
+                  <span>Handled and remove from the list</span>
+                </label>
               </article>
             `
           )
@@ -536,6 +647,70 @@ function initHomePage() {
           )
           .join("")
       : `<div class="empty">No players are on the leaderboard yet.</div>`;
+  }
+
+  function renderPointRequests(data) {
+    const recipients = data.recipients || [];
+    requestRecipientSelect.innerHTML = recipients.length
+      ? recipients
+          .map(
+            (entry) => `
+              <option value="${escapeHtml(entry.username)}">
+                ${escapeHtml(entry.username)} (${entry.points} pts)
+              </option>
+            `
+          )
+          .join("")
+      : `<option value="">No other players found</option>`;
+
+    sendRequestButton.disabled = !data.canSendToday || recipients.length === 0;
+
+    incomingRequestsList.innerHTML = data.incoming.length
+      ? data.incoming
+          .map(
+            (entry) => `
+              <article class="user-card">
+                <div class="row">
+                  <div>
+                    <h3>${escapeHtml(entry.requesterName)}</h3>
+                    <p class="muted">Asked for ${entry.amount} points</p>
+                  </div>
+                  <div class="points">${entry.amount} pts</div>
+                </div>
+                <div class="muted">Sent: ${new Date(entry.created_at).toLocaleString()}</div>
+                <div class="actions">
+                  <button class="secondary" onclick="respondToPointRequest(${entry.id}, 'approve')">Give Points</button>
+                  <button class="danger" onclick="respondToPointRequest(${entry.id}, 'reject')">Reject</button>
+                </div>
+              </article>
+            `
+          )
+          .join("")
+      : `<div class="empty">No incoming requests right now.</div>`;
+
+    outgoingRequestsList.innerHTML = data.outgoing.length
+      ? data.outgoing
+          .map(
+            (entry) => `
+              <article class="user-card">
+                <div class="row">
+                  <div>
+                    <h3>${escapeHtml(entry.recipientName)}</h3>
+                    <p class="muted">Requested ${entry.amount} points</p>
+                  </div>
+                  <div class="stock-tag request-status">${escapeHtml(entry.status)}</div>
+                </div>
+                <div class="muted">Requested: ${new Date(entry.created_at).toLocaleString()}</div>
+                ${
+                  entry.responded_at
+                    ? `<div class="muted">Updated: ${new Date(entry.responded_at).toLocaleString()}</div>`
+                    : ""
+                }
+              </article>
+            `
+          )
+          .join("")
+      : `<div class="empty">You have not made a request yet.</div>`;
   }
 
   function renderShopManager(items) {
@@ -600,6 +775,45 @@ function initHomePage() {
       : `<div class="empty">No shop items found yet.</div>`;
   }
 
+  function renderWheelManager(prizes) {
+    wheelAdminList.innerHTML = prizes
+      .map(
+        (prize) => `
+          <article class="user-card slot-admin-card">
+            <div class="row">
+              <div>
+                <h3>Prize ${prize.slotIndex + 1}</h3>
+                <p class="muted">Live odds: ${prize.oddsPercent}%</p>
+              </div>
+              <div class="points">${formatSignedPoints(prize.pointChange)}</div>
+            </div>
+            <div class="slot-admin-grid">
+              <label class="stack">
+                <span class="muted">Prize name</span>
+                <input id="slot-label-${prize.slotIndex}" type="text" value="${escapeHtml(prize.label)}" />
+              </label>
+              <label class="stack">
+                <span class="muted">Point change</span>
+                <input id="slot-change-${prize.slotIndex}" type="number" min="-500" max="500" step="1" value="${prize.pointChange}" />
+              </label>
+              <label class="stack">
+                <span class="muted">Odds weight</span>
+                <input id="slot-weight-${prize.slotIndex}" type="number" min="1" max="1000" step="1" value="${prize.weight}" />
+              </label>
+              <label class="stack checkbox-stack">
+                <span class="muted">Use this prize</span>
+                <label class="toggle-row">
+                  <input id="slot-active-${prize.slotIndex}" type="checkbox" ${prize.active ? "checked" : ""} />
+                  <span>Active</span>
+                </label>
+              </label>
+            </div>
+          </article>
+        `
+      )
+      .join("");
+  }
+
   async function loadPage() {
     user = await getCurrentUser();
     renderUserShell();
@@ -608,7 +822,6 @@ function initHomePage() {
     renderLeaderboard(leaderboardData.leaderboard);
 
     if (user.role === "admin") {
-      activateAdminTab("players");
       const [usersData, logsData, shopData, wheelData] = await Promise.all([
         api("/api/users", { method: "GET" }),
         api("/api/redemptions", { method: "GET" }),
@@ -617,15 +830,21 @@ function initHomePage() {
       ]);
       renderAdminLists(usersData.users, logsData.logs);
       renderShopManager(shopData.items);
-      wheelData.options.forEach((value, index) => {
-        if (wheelOptionInputs[index]) {
-          wheelOptionInputs[index].value = value;
-        }
-      });
+      renderWheelManager(wheelData.prizes);
+      activateAdminTab(currentAdminTab);
+      return;
     }
+
+    const requestData = await api("/api/point-requests", { method: "GET" });
+    renderPointRequests(requestData);
+    activatePlayerTab(currentPlayerTab);
   }
 
   logoutButton.addEventListener("click", () => {
+    if (playerRefreshTimer) {
+      clearInterval(playerRefreshTimer);
+      playerRefreshTimer = null;
+    }
     logout();
   });
 
@@ -641,6 +860,16 @@ function initHomePage() {
     tab.addEventListener("click", () => {
       activateAdminTab(tab.dataset.adminTab);
     });
+  });
+
+  playerTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      activatePlayerTab(tab.dataset.playerTab);
+    });
+  });
+
+  sendRequestButton.addEventListener("click", () => {
+    sendPointRequest();
   });
 
   shopButton.addEventListener("click", () => {
@@ -676,6 +905,14 @@ function initHomePage() {
       window.location.href = "/index.html";
     }, 1000);
   });
+
+  playerRefreshTimer = setInterval(() => {
+    if (!user || user.role === "admin") {
+      return;
+    }
+
+    loadPage().catch(() => {});
+  }, 15000);
 }
 
 function initShopPage() {
@@ -828,21 +1065,21 @@ function initWheelPage() {
   const wheelPointsValue = document.getElementById("wheelPointsValue");
   const wheelTicketsValue = document.getElementById("wheelTicketsValue");
   const claimStatusText = document.getElementById("claimStatusText");
-  const betAmount = document.getElementById("betAmount");
   const claimTicketButton = document.getElementById("claimTicketButton");
   const spinButton = document.getElementById("spinButton");
-  const wheelDisc = document.getElementById("wheelDisc");
   const wheelResultText = document.getElementById("wheelResultText");
   const logoutButton = document.getElementById("logoutButton");
-  const wheelLegend = document.querySelector(".wheel-legend");
+  const slotPrizeGrid = document.getElementById("slotPrizeGrid");
+  const reels = [0, 1, 2].map((index) => document.getElementById(`slotReel${index}`));
 
-  const rotationMap = [315, 45, 225, 135];
-  let currentRotation = 0;
   let user = null;
+  let spinning = false;
+  let refreshTimer = null;
   let wheelStatus = {
     tickets: 0,
-    claimedToday: false,
-    options: [-25, 25, -50, 50],
+    canClaim: false,
+    mondayOpen: false,
+    prizes: [],
   };
 
   function renderStatus() {
@@ -851,23 +1088,55 @@ function initWheelPage() {
     ticketCount.textContent = `${wheelStatus.tickets} ticket${wheelStatus.tickets === 1 ? "" : "s"}`;
     wheelPointsValue.textContent = user.points;
     wheelTicketsValue.textContent = wheelStatus.tickets;
-    claimStatusText.textContent = wheelStatus.claimedToday
-      ? "Today's ticket is already claimed."
-      : "You can claim 1 ticket today.";
-    claimTicketButton.disabled = wheelStatus.claimedToday;
-    spinButton.disabled = wheelStatus.tickets < 1;
+    claimStatusText.textContent = wheelStatus.mondayOpen
+      ? wheelStatus.canClaim
+        ? "Your Monday ticket is ready to claim."
+        : "This Monday's ticket has already been claimed."
+      : "Tickets unlock on Mondays only.";
+    claimTicketButton.disabled = !wheelStatus.canClaim || spinning;
+    spinButton.disabled = wheelStatus.tickets < 1 || wheelStatus.prizes.length === 0 || spinning;
   }
 
-  function renderWheelLegend() {
-    wheelLegend.innerHTML = wheelStatus.options
-      .map(
-        (value) => `
-          <div class="wheel-chip ${value >= 0 ? "gain" : "loss"}">
-            ${value > 0 ? "+" : ""}${value}%
-          </div>
-        `
-      )
-      .join("");
+  function renderPrizeGrid() {
+    slotPrizeGrid.innerHTML = wheelStatus.prizes.length
+      ? wheelStatus.prizes
+          .map(
+            (prize) => `
+              <article class="shop-card slot-prize-card">
+                <div class="shop-top">
+                  <div>
+                    <h3>${escapeHtml(prize.label)}</h3>
+                    <p class="muted">${prize.oddsPercent}% live odds</p>
+                  </div>
+                  <div class="cost">${formatSignedPoints(prize.pointChange)}</div>
+                </div>
+              </article>
+            `
+          )
+          .join("")
+      : `<div class="empty">The admin has not turned on any slot prizes yet.</div>`;
+  }
+
+  async function animateSlotMachine(resultLabel) {
+    const labels = wheelStatus.prizes.length
+      ? wheelStatus.prizes.map((prize) => prize.label.toUpperCase())
+      : ["WAIT"];
+
+    reels.forEach((reel) => reel.classList.add("slot-reel-spinning"));
+
+    for (let reelIndex = 0; reelIndex < reels.length; reelIndex += 1) {
+      for (let step = 0; step < 12 + reelIndex * 4; step += 1) {
+        reels[reelIndex].textContent = labels[(step + reelIndex) % labels.length];
+        await wait(90);
+      }
+
+      reels[reelIndex].textContent = resultLabel.toUpperCase();
+      await wait(140);
+      reels[reelIndex].classList.remove("slot-reel-spinning");
+      reels[reelIndex].classList.add("slot-reel-hit");
+      await wait(120);
+      reels[reelIndex].classList.remove("slot-reel-hit");
+    }
   }
 
   async function refreshWheelData() {
@@ -881,11 +1150,12 @@ function initWheelPage() {
     const statusData = await api("/api/wheel-status", { method: "GET" });
     wheelStatus = {
       tickets: statusData.tickets,
-      claimedToday: statusData.claimedToday,
-      options: statusData.options,
+      canClaim: statusData.canClaim,
+      mondayOpen: statusData.mondayOpen,
+      prizes: statusData.prizes,
     };
     renderStatus();
-    renderWheelLegend();
+    renderPrizeGrid();
   }
 
   async function claimTicket() {
@@ -894,7 +1164,7 @@ function initWheelPage() {
     try {
       const data = await api("/api/wheel-claim", { method: "POST" });
       wheelStatus.tickets = data.tickets;
-      wheelStatus.claimedToday = data.claimedToday;
+      wheelStatus.canClaim = data.canClaim;
       renderStatus();
       setMessage(message, data.message);
     } catch (error) {
@@ -903,26 +1173,34 @@ function initWheelPage() {
   }
 
   async function spinWheel() {
+    if (spinning) {
+      return;
+    }
+
     clearMessage(message);
-    const amount = Number(betAmount.value);
+    spinning = true;
+    renderStatus();
 
     try {
       const data = await api("/api/wheel-spin", {
         method: "POST",
-        body: JSON.stringify({ betAmount: amount }),
       });
 
+      await animateSlotMachine(data.result.label);
       user = data.user;
+      savePlayerStyle(user);
       wheelStatus.tickets = data.tickets;
-      currentRotation += 1440 + rotationMap[data.result.index];
-      wheelDisc.style.transform = `rotate(${currentRotation}deg)`;
       wheelResultText.textContent =
-        `${data.result.label} on a ${data.result.betAmount} point bet. ` +
-        `${data.result.pointChange >= 0 ? "Won" : "Lost"} ${Math.abs(data.result.pointChange)} points.`;
+        `${data.result.label}: ${data.result.pointChange >= 0 ? "won" : "lost"} ` +
+        `${Math.abs(data.result.pointChange)} points at ${data.result.oddsPercent}% odds.`;
+      await refreshWheelData();
       renderStatus();
       setMessage(message, data.message);
     } catch (error) {
       setMessage(message, error.message, "error");
+    } finally {
+      spinning = false;
+      renderStatus();
     }
   }
 
@@ -935,6 +1213,10 @@ function initWheelPage() {
   });
 
   logoutButton.addEventListener("click", () => {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
     logout();
   });
 
@@ -944,6 +1226,12 @@ function initWheelPage() {
       window.location.href = "/index.html";
     }, 1000);
   });
+
+  refreshTimer = setInterval(() => {
+    if (!spinning) {
+      refreshWheelData().catch(() => {});
+    }
+  }, 10000);
 }
 
 function initSettingsPage() {
