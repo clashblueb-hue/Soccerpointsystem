@@ -110,7 +110,10 @@ async function routeRequest(request, env) {
     void user;
     const users = await dbAll(
       env,
-      "SELECT id, username, role, points FROM users ORDER BY role DESC, username ASC"
+      `SELECT u.id, u.username, u.role, u.points, COALESCE(wt.tickets, 0) AS tickets
+       FROM users u
+       LEFT JOIN wheel_tickets wt ON wt.user_id = u.id
+       ORDER BY u.role DESC, u.username ASC`
     );
     return json({
       success: true,
@@ -214,6 +217,52 @@ async function routeRequest(request, env) {
         ...normalizeUser(target),
         points: nextPoints,
       },
+    });
+  }
+
+  if (route === "/tickets" && request.method === "POST") {
+    await requireAdmin(request, env);
+    const body = await request.json();
+    const username = String(body.username || "").trim();
+    const amount = Number(body.amount);
+
+    if (!username || !Number.isInteger(amount) || amount === 0) {
+      return json(
+        { success: false, message: "Username and a whole-number ticket amount are required" },
+        400
+      );
+    }
+
+    const target = await dbGet(
+      env,
+      "SELECT id, username, role FROM users WHERE username = ?",
+      [username]
+    );
+
+    if (!target) {
+      return json({ success: false, message: "User not found" }, 404);
+    }
+
+    if (target.role !== "player") {
+      return json(
+        { success: false, message: "Only player accounts can receive slot tickets" },
+        400
+      );
+    }
+
+    const ticketState = await getWheelTicketState(env, target.id);
+    const nextTickets = Math.max(0, ticketState.tickets + amount);
+
+    await dbRun(
+      env,
+      "UPDATE wheel_tickets SET tickets = ? WHERE user_id = ?",
+      [nextTickets, target.id]
+    );
+
+    return json({
+      success: true,
+      message: `${amount > 0 ? "Added" : "Removed"} ${Math.abs(amount)} slot ticket${Math.abs(amount) === 1 ? "" : "s"} for ${target.username}`,
+      tickets: nextTickets,
     });
   }
 
@@ -1341,6 +1390,7 @@ function normalizeUser(user) {
     username: user.username,
     role: user.role,
     points: Number(user.points),
+    tickets: Number(user.tickets || 0),
     theme: normalizeTheme(user.theme),
     profileLetter: normalizeProfileLetter(user.profile_letter, user.username),
     clickEffect: normalizeClickEffect(user.click_effect),
