@@ -3,7 +3,16 @@ const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 const DEFAULT_ADMIN_USERNAME = "admin1234";
 const DEFAULT_ADMIN_PASSWORD = "gamer@00";
 const PASSWORD_ITERATIONS = 100000;
-const DEFAULT_WHEEL_OPTIONS = [-25, 25, -50, 50];
+const DEFAULT_SLOT_PRIZES = [
+  { label: "Jackpot", pointChange: 60, weight: 4, active: 1 },
+  { label: "Big Win", pointChange: 35, weight: 8, active: 1 },
+  { label: "Nice Boost", pointChange: 20, weight: 12, active: 1 },
+  { label: "Small Win", pointChange: 10, weight: 18, active: 1 },
+  { label: "Lucky Save", pointChange: 5, weight: 16, active: 1 },
+  { label: "Slip", pointChange: -5, weight: 16, active: 1 },
+  { label: "Penalty", pointChange: -15, weight: 14, active: 1 },
+  { label: "Big Miss", pointChange: -30, weight: 12, active: 1 },
+];
 
 let setupPromise = null;
 
@@ -136,6 +145,11 @@ async function routeRequest(request, env) {
     }
 
     await dbRun(env, "DELETE FROM wheel_tickets WHERE user_id = ?", [target.id]);
+    await dbRun(
+      env,
+      "DELETE FROM point_requests WHERE requester_id = ? OR recipient_id = ?",
+      [target.id, target.id]
+    );
     await dbRun(env, "DELETE FROM users WHERE id = ?", [target.id]);
 
     return json({
@@ -340,63 +354,109 @@ async function routeRequest(request, env) {
 
     if (user.role === "admin") {
       return json(
-        { success: false, message: "Admins cannot use the daily wheel" },
+        { success: false, message: "Admins cannot use the weekly slot machine" },
         403
       );
     }
 
     const ticketState = await getWheelTicketState(env, user.id);
-    const options = await getWheelOptions(env);
+    const prizes = await getWheelPrizes(env, true);
+    const today = getTorontoDateString();
+    const mondayOpen = isTorontoMonday();
     return json({
       success: true,
       tickets: ticketState.tickets,
-      claimedToday: ticketState.last_claimed_date === getTorontoDateString(),
-      options,
+      canClaim: mondayOpen && ticketState.last_claimed_date !== today,
+      mondayOpen,
+      prizes,
     });
   }
 
   if (route === "/wheel-config" && request.method === "GET") {
     await requireAdmin(request, env);
-    const options = await getWheelOptions(env);
+    const prizes = await getWheelPrizes(env, false);
     return json({
       success: true,
-      options,
+      prizes,
     });
   }
 
   if (route === "/wheel-config" && request.method === "POST") {
     await requireAdmin(request, env);
     const body = await request.json();
-    const rawOptions = Array.isArray(body.options) ? body.options : [];
-    const options = rawOptions.slice(0, 4).map((value) => Number(value));
+    const rawPrizes = Array.isArray(body.prizes) ? body.prizes.slice(0, 8) : [];
 
-    if (
-      options.length !== 4 ||
-      options.some((value) => Number.isNaN(value) || !Number.isFinite(value) || value < -100 || value > 100)
-    ) {
+    if (rawPrizes.length !== 8) {
       return json(
         {
           success: false,
-          message: "Enter 4 wheel values between -100 and 100",
+          message: "Set all 8 slot prizes before saving",
         },
         400
       );
     }
 
-    for (let index = 0; index < options.length; index += 1) {
+    const prizes = rawPrizes.map((prize, index) => {
+      const label = String(prize.label || "").trim().slice(0, 40);
+      const pointChange = Number(prize.pointChange);
+      const weight = Number(prize.weight);
+      const active = prize.active ? 1 : 0;
+
+      if (
+        !label ||
+        !Number.isInteger(pointChange) ||
+        pointChange < -500 ||
+        pointChange > 500 ||
+        !Number.isInteger(weight) ||
+        weight < 1 ||
+        weight > 1000
+      ) {
+        throw withStatus(
+          `Prize ${index + 1} needs a name, a point change from -500 to 500, and an odds weight from 1 to 1000`,
+          400
+        );
+      }
+
+      return {
+        slotIndex: index,
+        label,
+        pointChange,
+        weight,
+        active,
+      };
+    });
+
+    if (!prizes.some((prize) => prize.active === 1)) {
+      return json(
+        { success: false, message: "At least 1 slot prize must stay active" },
+        400
+      );
+    }
+
+    for (const prize of prizes) {
       await dbRun(
         env,
-        `INSERT INTO wheel_config (slot_index, percent)
-         VALUES (?, ?)
-         ON CONFLICT(slot_index) DO UPDATE SET percent = excluded.percent`,
-        [index, Math.round(options[index])]
+        `INSERT INTO wheel_config (slot_index, label, point_change, weight, active)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(slot_index) DO UPDATE SET
+           label = excluded.label,
+           point_change = excluded.point_change,
+           weight = excluded.weight,
+           active = excluded.active`,
+        [
+          prize.slotIndex,
+          prize.label,
+          prize.pointChange,
+          prize.weight,
+          prize.active,
+        ]
       );
     }
 
     return json({
       success: true,
-      message: "Updated the daily wheel",
-      options,
+      message: "Updated the weekly slot machine",
+      prizes: await getWheelPrizes(env, false),
     });
   }
 
@@ -405,7 +465,7 @@ async function routeRequest(request, env) {
 
     if (user.role === "admin") {
       return json(
-        { success: false, message: "Admins cannot use the daily wheel" },
+        { success: false, message: "Admins cannot use the weekly slot machine" },
         403
       );
     }
@@ -413,9 +473,16 @@ async function routeRequest(request, env) {
     const today = getTorontoDateString();
     const ticketState = await getWheelTicketState(env, user.id);
 
+    if (!isTorontoMonday()) {
+      return json(
+        { success: false, message: "Weekly tickets unlock on Mondays only" },
+        400
+      );
+    }
+
     if (ticketState.last_claimed_date === today) {
       return json(
-        { success: false, message: "You already claimed today's ticket" },
+        { success: false, message: "You already claimed this Monday's ticket" },
         400
       );
     }
@@ -433,9 +500,9 @@ async function routeRequest(request, env) {
 
     return json({
       success: true,
-      message: "You claimed 1 daily ticket",
+      message: "You claimed this week's slot ticket",
       tickets: nextTickets,
-      claimedToday: true,
+      canClaim: false,
     });
   }
 
@@ -444,18 +511,8 @@ async function routeRequest(request, env) {
 
     if (user.role === "admin") {
       return json(
-        { success: false, message: "Admins cannot use the daily wheel" },
+        { success: false, message: "Admins cannot use the weekly slot machine" },
         403
-      );
-    }
-
-    const body = await request.json();
-    const betAmount = Number(body.betAmount);
-
-    if (!Number.isInteger(betAmount) || betAmount <= 0) {
-      return json(
-        { success: false, message: "Bet amount must be a whole number above 0" },
-        400
       );
     }
 
@@ -468,26 +525,22 @@ async function routeRequest(request, env) {
 
     if (ticketState.tickets < 1) {
       return json(
-        { success: false, message: "Claim your daily ticket before spinning" },
+        { success: false, message: "Claim this week's ticket before spinning" },
         400
       );
     }
 
-    if (Number(freshUser.points) < betAmount) {
+    const prizes = await getWheelPrizes(env, true);
+
+    if (prizes.length === 0) {
       return json(
-        { success: false, message: "You do not have enough points for that bet" },
+        { success: false, message: "The slot machine does not have any active prizes yet" },
         400
       );
     }
 
-    const options = await getWheelOptions(env);
-    const optionIndex = crypto.getRandomValues(new Uint32Array(1))[0] % options.length;
-    const percent = options[optionIndex];
-    const magnitude = Math.max(
-      1,
-      Math.round((betAmount * Math.abs(percent)) / 100)
-    );
-    const pointChange = percent > 0 ? magnitude : -magnitude;
+    const selectedPrize = chooseWeightedPrize(prizes);
+    const pointChange = selectedPrize.pointChange;
     const nextPoints = Number(freshUser.points) + pointChange;
     const nextTickets = ticketState.tickets - 1;
 
@@ -502,13 +555,12 @@ async function routeRequest(request, env) {
 
     return json({
       success: true,
-      message: `Wheel result: ${formatWheelLabel(percent)}`,
+      message: `Slot result: ${selectedPrize.label}`,
       result: {
-        index: optionIndex,
-        percent,
-        label: formatWheelLabel(percent),
-        betAmount,
+        slotIndex: selectedPrize.slotIndex,
+        label: selectedPrize.label,
         pointChange,
+        oddsPercent: selectedPrize.oddsPercent,
       },
       tickets: nextTickets,
       user: {
@@ -567,8 +619,8 @@ async function routeRequest(request, env) {
     ]);
     await dbRun(
       env,
-      `INSERT INTO redemptions (username, item, cost, expires_at, keep_forever)
-       VALUES (?, ?, ?, datetime('now', '+3 hours'), 0)`,
+      `INSERT INTO redemptions (username, item, cost)
+       VALUES (?, ?, ?)`,
       [freshUser.username, item.name, item.cost]
     );
 
@@ -584,16 +636,9 @@ async function routeRequest(request, env) {
 
   if (route === "/redemptions" && request.method === "GET") {
     await requireAdmin(request, env);
-    await dbRun(
-      env,
-      `DELETE FROM redemptions
-       WHERE keep_forever = 0
-         AND expires_at IS NOT NULL
-         AND expires_at <= CURRENT_TIMESTAMP`
-    );
     const logs = await dbAll(
       env,
-      `SELECT id, username, item, cost, created_at, expires_at, keep_forever
+      `SELECT id, username, item, cost, created_at
        FROM redemptions
        ORDER BY id DESC`
     );
@@ -605,13 +650,11 @@ async function routeRequest(request, env) {
         item: log.item,
         cost: Number(log.cost),
         created_at: log.created_at,
-        expires_at: log.expires_at,
-        keepForever: Boolean(Number(log.keep_forever)),
       })),
     });
   }
 
-  if (route === "/redemptions/preserve" && request.method === "POST") {
+  if (route === "/redemptions/delete" && request.method === "POST") {
     await requireAdmin(request, env);
     const body = await request.json();
     const redemptionId = Number(body.redemptionId);
@@ -635,13 +678,255 @@ async function routeRequest(request, env) {
 
     await dbRun(
       env,
-      "UPDATE redemptions SET keep_forever = 1, expires_at = NULL WHERE id = ?",
+      "DELETE FROM redemptions WHERE id = ?",
       [redemptionId]
     );
 
     return json({
       success: true,
-      message: `Saved ${redemption.item} in the purchase log`,
+      message: `Removed ${redemption.item} from the purchase list`,
+    });
+  }
+
+  if (route === "/point-requests" && request.method === "GET") {
+    const user = await requireUser(request, env);
+
+    if (user.role === "admin") {
+      return json(
+        { success: false, message: "Admins do not use player point requests" },
+        403
+      );
+    }
+
+    const today = getTorontoDateString();
+    const recipients = await dbAll(
+      env,
+      `SELECT username, points
+       FROM users
+       WHERE role = 'player' AND id != ?
+       ORDER BY username ASC`,
+      [user.id]
+    );
+    const incoming = await dbAll(
+      env,
+      `SELECT pr.id, pr.amount, pr.status, pr.created_at, u.username AS requester_name
+       FROM point_requests pr
+       JOIN users u ON u.id = pr.requester_id
+       WHERE pr.recipient_id = ? AND pr.status = 'pending'
+       ORDER BY pr.id DESC`,
+      [user.id]
+    );
+    const outgoing = await dbAll(
+      env,
+      `SELECT pr.id, pr.amount, pr.status, pr.request_date, pr.created_at, pr.responded_at,
+              u.username AS recipient_name
+       FROM point_requests pr
+       JOIN users u ON u.id = pr.recipient_id
+       WHERE pr.requester_id = ?
+       ORDER BY pr.id DESC
+       LIMIT 8`,
+      [user.id]
+    );
+    const sentToday = await dbGet(
+      env,
+      `SELECT COUNT(*) AS count
+       FROM point_requests
+       WHERE requester_id = ? AND request_date = ?`,
+      [user.id, today]
+    );
+
+    return json({
+      success: true,
+      canSendToday: Number(sentToday.count) === 0,
+      recipients: recipients.map((entry) => ({
+        username: entry.username,
+        points: Number(entry.points),
+      })),
+      incoming: incoming.map((entry) => ({
+        id: Number(entry.id),
+        amount: Number(entry.amount),
+        status: entry.status,
+        created_at: entry.created_at,
+        requesterName: entry.requester_name,
+      })),
+      outgoing: outgoing.map((entry) => ({
+        id: Number(entry.id),
+        amount: Number(entry.amount),
+        status: entry.status,
+        request_date: entry.request_date,
+        created_at: entry.created_at,
+        responded_at: entry.responded_at,
+        recipientName: entry.recipient_name,
+      })),
+    });
+  }
+
+  if (route === "/point-requests" && request.method === "POST") {
+    const user = await requireUser(request, env);
+
+    if (user.role === "admin") {
+      return json(
+        { success: false, message: "Admins do not use player point requests" },
+        403
+      );
+    }
+
+    const body = await request.json();
+    const recipientUsername = String(body.recipientUsername || "").trim();
+    const amount = Number(body.amount);
+    const today = getTorontoDateString();
+
+    if (!recipientUsername || !Number.isInteger(amount) || amount <= 0) {
+      return json(
+        { success: false, message: "Choose a player and enter a whole-number amount" },
+        400
+      );
+    }
+
+    const sentToday = await dbGet(
+      env,
+      `SELECT COUNT(*) AS count
+       FROM point_requests
+       WHERE requester_id = ? AND request_date = ?`,
+      [user.id, today]
+    );
+
+    if (Number(sentToday.count) > 0) {
+      return json(
+        { success: false, message: "You can only ask another player once per day" },
+        400
+      );
+    }
+
+    const recipient = await dbGet(
+      env,
+      `SELECT id, username, role
+       FROM users
+       WHERE username = ?`,
+      [recipientUsername]
+    );
+
+    if (!recipient || recipient.role !== "player") {
+      return json({ success: false, message: "That player could not be found" }, 404);
+    }
+
+    if (Number(recipient.id) === user.id) {
+      return json(
+        { success: false, message: "You cannot ask yourself for points" },
+        400
+      );
+    }
+
+    await dbRun(
+      env,
+      `INSERT INTO point_requests (requester_id, recipient_id, amount, status, request_date)
+       VALUES (?, ?, ?, 'pending', ?)`,
+      [user.id, recipient.id, amount, today]
+    );
+
+    return json({
+      success: true,
+      message: `Sent a point request to ${recipient.username}`,
+    });
+  }
+
+  if (route === "/point-requests/respond" && request.method === "POST") {
+    const user = await requireUser(request, env);
+
+    if (user.role === "admin") {
+      return json(
+        { success: false, message: "Admins do not use player point requests" },
+        403
+      );
+    }
+
+    const body = await request.json();
+    const requestId = Number(body.requestId);
+    const action = String(body.action || "").trim().toLowerCase();
+
+    if (Number.isNaN(requestId) || !["approve", "reject"].includes(action)) {
+      return json(
+        { success: false, message: "A valid request and action are required" },
+        400
+      );
+    }
+
+    const requestRecord = await dbGet(
+      env,
+      `SELECT pr.id, pr.amount, pr.status, pr.requester_id, pr.recipient_id,
+              requester.username AS requester_name
+       FROM point_requests pr
+       JOIN users requester ON requester.id = pr.requester_id
+       WHERE pr.id = ? AND pr.recipient_id = ?`,
+      [requestId, user.id]
+    );
+
+    if (!requestRecord) {
+      return json({ success: false, message: "Request not found" }, 404);
+    }
+
+    if (requestRecord.status !== "pending") {
+      return json({ success: false, message: "That request is already closed" }, 400);
+    }
+
+    if (action === "reject") {
+      await dbRun(
+        env,
+        `UPDATE point_requests
+         SET status = 'rejected', responded_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [requestId]
+      );
+
+      return json({
+        success: true,
+        message: `Rejected ${requestRecord.requester_name}'s request`,
+      });
+    }
+
+    const recipientFresh = await dbGet(
+      env,
+      "SELECT id, points FROM users WHERE id = ?",
+      [user.id]
+    );
+
+    if (Number(recipientFresh.points) < Number(requestRecord.amount)) {
+      return json(
+        {
+          success: false,
+          message: `You need ${requestRecord.amount} points to approve this request`,
+        },
+        400
+      );
+    }
+
+    const requesterFresh = await dbGet(
+      env,
+      "SELECT id, points FROM users WHERE id = ?",
+      [requestRecord.requester_id]
+    );
+
+    await dbRun(
+      env,
+      "UPDATE users SET points = ? WHERE id = ?",
+      [Number(recipientFresh.points) - Number(requestRecord.amount), user.id]
+    );
+    await dbRun(
+      env,
+      "UPDATE users SET points = ? WHERE id = ?",
+      [Number(requesterFresh.points) + Number(requestRecord.amount), requestRecord.requester_id]
+    );
+    await dbRun(
+      env,
+      `UPDATE point_requests
+       SET status = 'approved', responded_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [requestId]
+    );
+
+    return json({
+      success: true,
+      message: `Sent ${requestRecord.amount} points to ${requestRecord.requester_name}`,
     });
   }
 
@@ -740,13 +1025,6 @@ async function setupDatabase(env) {
 
   await dbRun(
     env,
-    `UPDATE redemptions
-     SET expires_at = datetime(created_at, '+3 hours')
-     WHERE expires_at IS NULL AND keep_forever = 0`
-  );
-
-  await dbRun(
-    env,
     `CREATE TABLE IF NOT EXISTS wheel_tickets (
       user_id INTEGER PRIMARY KEY,
       tickets INTEGER NOT NULL DEFAULT 0,
@@ -759,7 +1037,47 @@ async function setupDatabase(env) {
     env,
     `CREATE TABLE IF NOT EXISTS wheel_config (
       slot_index INTEGER PRIMARY KEY,
-      percent INTEGER NOT NULL
+      percent INTEGER NOT NULL,
+      label TEXT NOT NULL DEFAULT '',
+      point_change INTEGER NOT NULL DEFAULT 0,
+      weight INTEGER NOT NULL DEFAULT 1,
+      active INTEGER NOT NULL DEFAULT 1
+    )`
+  );
+
+  await dbRun(
+    env,
+    "ALTER TABLE wheel_config ADD COLUMN label TEXT NOT NULL DEFAULT ''"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    "ALTER TABLE wheel_config ADD COLUMN point_change INTEGER NOT NULL DEFAULT 0"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    "ALTER TABLE wheel_config ADD COLUMN weight INTEGER NOT NULL DEFAULT 1"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    "ALTER TABLE wheel_config ADD COLUMN active INTEGER NOT NULL DEFAULT 1"
+  ).catch(() => {});
+
+  await dbRun(
+    env,
+    `CREATE TABLE IF NOT EXISTS point_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      requester_id INTEGER NOT NULL,
+      recipient_id INTEGER NOT NULL,
+      amount INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      request_date TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      responded_at TEXT,
+      FOREIGN KEY (requester_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
     )`
   );
 
@@ -807,15 +1125,52 @@ async function setupDatabase(env) {
     }
   }
 
-  const wheelCount = await dbGet(env, "SELECT COUNT(*) AS count FROM wheel_config");
-  if (Number(wheelCount.count) === 0) {
-    for (let index = 0; index < DEFAULT_WHEEL_OPTIONS.length; index += 1) {
+  for (let index = 0; index < DEFAULT_SLOT_PRIZES.length; index += 1) {
+    const defaultPrize = DEFAULT_SLOT_PRIZES[index];
+    const existingPrize = await dbGet(
+      env,
+      "SELECT slot_index, percent, label, point_change, weight, active FROM wheel_config WHERE slot_index = ?",
+      [index]
+    );
+
+    if (!existingPrize) {
       await dbRun(
         env,
-        "INSERT INTO wheel_config (slot_index, percent) VALUES (?, ?)",
-        [index, DEFAULT_WHEEL_OPTIONS[index]]
+        `INSERT INTO wheel_config (slot_index, percent, label, point_change, weight, active)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          index,
+          defaultPrize.pointChange,
+          defaultPrize.label,
+          defaultPrize.pointChange,
+          defaultPrize.weight,
+          defaultPrize.active,
+        ]
       );
+      continue;
     }
+
+    const hasModernSlotFields = String(existingPrize.label || "").trim().length > 0;
+    const nextLabel = hasModernSlotFields
+      ? String(existingPrize.label || "").trim()
+      : defaultPrize.label;
+    const nextPointChange = hasModernSlotFields
+      ? Number(existingPrize.point_change)
+      : Number(existingPrize.percent || defaultPrize.pointChange);
+    const nextWeight = hasModernSlotFields
+      ? Math.max(1, Number(existingPrize.weight || defaultPrize.weight))
+      : defaultPrize.weight;
+    const nextActive = hasModernSlotFields
+      ? (Number(existingPrize.active ?? defaultPrize.active) ? 1 : 0)
+      : defaultPrize.active;
+
+    await dbRun(
+      env,
+      `UPDATE wheel_config
+       SET label = ?, point_change = ?, weight = ?, active = ?
+       WHERE slot_index = ?`,
+      [nextLabel, nextPointChange, nextWeight, nextActive, index]
+    );
   }
 }
 
@@ -1029,17 +1384,53 @@ async function getWheelTicketState(env, userId) {
   };
 }
 
-async function getWheelOptions(env) {
+async function getWheelPrizes(env, activeOnly = false) {
   const rows = await dbAll(
     env,
-    "SELECT slot_index, percent FROM wheel_config ORDER BY slot_index ASC"
+    `SELECT slot_index, label, point_change, weight, active
+     FROM wheel_config
+     ORDER BY slot_index ASC`
   );
+  const seededRows = [];
 
-  if (rows.length === 4) {
-    return rows.map((row) => Number(row.percent));
+  for (let index = 0; index < DEFAULT_SLOT_PRIZES.length; index += 1) {
+    const row = rows.find((entry) => Number(entry.slot_index) === index);
+    const fallback = DEFAULT_SLOT_PRIZES[index];
+    const prize = {
+      slotIndex: index,
+      label: String(row?.label || "").trim() || fallback.label,
+      pointChange: Number.isFinite(Number(row?.point_change))
+        ? Number(row.point_change)
+        : fallback.pointChange,
+      weight: Math.max(1, Number(row?.weight || fallback.weight)),
+      active: row ? Boolean(Number(row.active)) : Boolean(fallback.active),
+    };
+    seededRows.push(prize);
   }
 
-  return DEFAULT_WHEEL_OPTIONS.slice();
+  const activeRows = seededRows.filter((prize) => prize.active);
+  const totalWeight = activeRows.reduce((sum, prize) => sum + prize.weight, 0) || 1;
+
+  const mapped = seededRows.map((prize) => ({
+    ...prize,
+    oddsPercent: prize.active ? Number(((prize.weight / totalWeight) * 100).toFixed(1)) : 0,
+  }));
+
+  return activeOnly ? mapped.filter((prize) => prize.active) : mapped;
+}
+
+function chooseWeightedPrize(prizes) {
+  const totalWeight = prizes.reduce((sum, prize) => sum + prize.weight, 0);
+  let pick = crypto.getRandomValues(new Uint32Array(1))[0] % totalWeight;
+
+  for (const prize of prizes) {
+    if (pick < prize.weight) {
+      return prize;
+    }
+    pick -= prize.weight;
+  }
+
+  return prizes[prizes.length - 1];
 }
 
 async function dbRun(env, sql, params = []) {
@@ -1183,8 +1574,11 @@ function getTorontoDateString() {
   return `${year}-${month}-${day}`;
 }
 
-function formatWheelLabel(percent) {
-  return `${percent > 0 ? "+" : ""}${percent}%`;
+function isTorontoMonday() {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Toronto",
+    weekday: "long",
+  }).format(new Date()) === "Monday";
 }
 
 function normalizeShopCategory(value) {
