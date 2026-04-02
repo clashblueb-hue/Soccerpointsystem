@@ -9,7 +9,6 @@
   </head>
   <body data-page="home">
     <div class="page">
-      <!-- This is the main page after login for both players and admins. -->
       <section class="hero">
         <span class="eyebrow">Rewards Home</span>
         <h1 id="heroTitle">Welcome</h1>
@@ -20,13 +19,11 @@
         <div class="panel-header">
           <div>
             <h2 id="welcomeTitle">Account</h2>
-            <p class="muted">
-              This page changes based on whether the user is a player or admin.
-            </p>
+            <p class="muted">This page changes based on whether the user is a player or admin.</p>
           </div>
           <div class="actions">
             <button class="ghost" id="shopButton" type="button">Open Shop</button>
-            <button class="ghost" id="wheelButton" type="button">Daily Wheel</button>
+            <button class="ghost" id="wheelButton" type="button">Weekly Slot</button>
             <button class="ghost" id="settingsButton" type="button">Settings</button>
             <button class="ghost" id="logoutButton" type="button">Logout</button>
           </div>
@@ -51,19 +48,70 @@
       <section id="playerHome" class="panel hidden">
         <div class="panel-header">
           <div>
-            <h2>Player Home</h2>
-            <p class="muted">Use the shop button above to redeem rewards.</p>
+            <h2>Player Area</h2>
+            <p class="muted">Use the tabs here to manage your own activity.</p>
           </div>
           <div class="profile-badge">
             <div class="profile-circle" id="profileLetterBadge">P</div>
             <div class="muted">Your profile letter</div>
           </div>
         </div>
-        <div class="note-card">
-          <p>
-            Wait for the admin to add points to your account, then open the shop
-            and redeem something you want.
-          </p>
+
+        <div class="player-tab-bar">
+          <button class="secondary player-tab is-active" data-player-tab="overview" type="button">Overview</button>
+          <button class="ghost player-tab" data-player-tab="requests" type="button">Point Requests</button>
+        </div>
+
+        <div class="player-tab-panel" data-player-panel="overview">
+          <div class="note-card">
+            <p>
+              Wait for points, try the weekly slot machine on Mondays, and open the shop whenever
+              you want to spend what you have earned.
+            </p>
+          </div>
+        </div>
+
+        <div class="player-tab-panel hidden" data-player-panel="requests">
+          <div class="panel-header">
+            <div>
+              <h3>Ask Another Player for Points</h3>
+              <p class="muted">You can send 1 request per day. The other player can approve or reject it.</p>
+            </div>
+          </div>
+
+          <div class="note-card stack">
+            <div class="request-grid">
+              <label class="stack">
+                <span class="muted">Choose a player</span>
+                <select id="requestRecipientSelect"></select>
+              </label>
+              <label class="stack">
+                <span class="muted">Requested points</span>
+                <input id="requestAmountInput" type="number" min="1" step="1" value="10" />
+              </label>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="sendRequestButton" type="button">Send Request</button>
+            </div>
+          </div>
+
+          <div class="grid dashboard-grid">
+            <div class="note-card stack">
+              <div>
+                <h3>Incoming Requests</h3>
+                <p class="muted">Approve these to give your own points away.</p>
+              </div>
+              <div id="incomingRequestsList" class="user-list"></div>
+            </div>
+
+            <div class="note-card stack">
+              <div>
+                <h3>Your Recent Requests</h3>
+                <p class="muted">Track what you have already asked for.</p>
+              </div>
+              <div id="outgoingRequestsList" class="user-list"></div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -81,7 +129,7 @@
         <div class="admin-tab-bar">
           <button class="secondary admin-tab is-active" data-admin-tab="players" type="button">Players</button>
           <button class="ghost admin-tab" data-admin-tab="shop" type="button">Shop</button>
-          <button class="ghost admin-tab" data-admin-tab="wheel" type="button">Wheel</button>
+          <button class="ghost admin-tab" data-admin-tab="wheel" type="button">Slot Machine</button>
           <button class="ghost admin-tab" data-admin-tab="purchases" type="button">Purchases</button>
         </div>
 
@@ -89,7 +137,7 @@
           <div class="panel-header">
             <div>
               <h2>Players</h2>
-              <p class="muted">Use these buttons to add or remove points, or delete an extra player account.</p>
+              <p class="muted">Adjust points or delete an extra player account.</p>
             </div>
           </div>
           <div id="userList" class="user-list"></div>
@@ -99,7 +147,7 @@
           <div class="panel-header">
             <div>
               <h2>Shop Manager</h2>
-              <p class="muted">Change prices or mark items out of stock and players will see the update.</p>
+              <p class="muted">Edit the live rewards players can see right away.</p>
             </div>
           </div>
           <div class="note-card stack">
@@ -131,40 +179,21 @@
         <div class="admin-tab-panel hidden" data-admin-panel="wheel">
           <div class="panel-header">
             <div>
-              <h2>Wheel Manager</h2>
-              <p class="muted">Choose the 4 percentage outcomes the daily wheel can land on.</p>
+              <h2>Weekly Slot Machine</h2>
+              <p class="muted">Set up to 8 prize results, their point values, and their live odds.</p>
             </div>
           </div>
-          <div class="note-card stack">
-            <div class="shop-admin-grid">
-              <label class="stack">
-                <span class="muted">Slot 1</span>
-                <input id="wheel-option-0" type="number" min="-100" max="100" step="1" />
-              </label>
-              <label class="stack">
-                <span class="muted">Slot 2</span>
-                <input id="wheel-option-1" type="number" min="-100" max="100" step="1" />
-              </label>
-              <label class="stack">
-                <span class="muted">Slot 3</span>
-                <input id="wheel-option-2" type="number" min="-100" max="100" step="1" />
-              </label>
-              <label class="stack">
-                <span class="muted">Slot 4</span>
-                <input id="wheel-option-3" type="number" min="-100" max="100" step="1" />
-              </label>
-            </div>
-            <div class="actions">
-              <button class="secondary" id="saveWheelConfigButton" type="button">Save Wheel</button>
-            </div>
+          <div id="wheelAdminList" class="slot-admin-list"></div>
+          <div class="actions">
+            <button class="secondary" id="saveWheelConfigButton" type="button">Save Slot Machine</button>
           </div>
         </div>
 
         <div class="admin-tab-panel hidden" data-admin-panel="purchases">
           <div class="panel-header">
             <div>
-              <h2>Redemption Log</h2>
-              <p class="muted">Purchased items are removed after 3 hours unless you save them.</p>
+              <h2>Purchase Checklist</h2>
+              <p class="muted">Check an item once it is handled and it will disappear from this list.</p>
             </div>
           </div>
           <div id="logList" class="log-list"></div>
