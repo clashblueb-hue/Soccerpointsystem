@@ -1072,6 +1072,25 @@ function initWheelPage() {
   const slotPrizeGrid = document.getElementById("slotPrizeGrid");
   const reels = [0, 1, 2].map((index) => document.getElementById(`slotReel${index}`));
 
+  if (
+    !message ||
+    !wheelPlayerName ||
+    !wheelPlayerPoints ||
+    !ticketCount ||
+    !wheelPointsValue ||
+    !wheelTicketsValue ||
+    !claimStatusText ||
+    !claimTicketButton ||
+    !spinButton ||
+    !wheelResultText ||
+    !logoutButton ||
+    !slotPrizeGrid ||
+    reels.some((reel) => !reel)
+  ) {
+    window.location.reload();
+    return;
+  }
+
   let user = null;
   let spinning = false;
   let refreshTimer = null;
