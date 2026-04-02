@@ -498,6 +498,11 @@ button:disabled {
   min-width: 92px;
 }
 
+.user-totals {
+  justify-items: end;
+  text-align: right;
+}
+
 .slot-admin-list {
   display: grid;
   gap: 14px;
