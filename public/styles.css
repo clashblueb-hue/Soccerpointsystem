@@ -427,17 +427,29 @@ button:disabled {
   margin-bottom: 18px;
 }
 
+.player-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 18px;
+}
+
 .admin-tab {
   min-width: 120px;
 }
 
-.admin-tab-panel {
+.admin-tab-panel,
+.player-tab-panel {
   display: grid;
   gap: 12px;
 }
 
 .checkbox-stack {
   align-content: end;
+}
+
+.checklist-row {
+  margin-top: 4px;
 }
 
 .toggle-row {
@@ -461,6 +473,34 @@ button:disabled {
   background: rgba(248, 113, 113, 0.14);
   color: #ffd6d6;
   font-weight: 800;
+}
+
+.request-status {
+  text-transform: capitalize;
+}
+
+.request-grid,
+.slot-admin-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.points-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.points-menu select {
+  width: auto;
+  min-width: 92px;
+}
+
+.slot-admin-list {
+  display: grid;
+  gap: 14px;
 }
 
 .wheel-panel {
@@ -487,6 +527,59 @@ button:disabled {
   display: grid;
   place-items: center;
   padding-top: 12px;
+}
+
+.slot-machine {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(10, 18, 33, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.slot-window {
+  min-height: 132px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(8, 17, 31, 0.96), rgba(17, 24, 39, 0.88));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.slot-reel {
+  width: 100%;
+  padding: 16px 10px;
+  text-align: center;
+  font-size: clamp(1rem, 2vw, 1.35rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.slot-reel-spinning {
+  animation: slotPulse 0.18s linear infinite alternate;
+}
+
+.slot-reel-hit {
+  animation: slotHit 0.32s ease;
+}
+
+.slot-prize-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.slot-prize-card {
+  min-height: 100%;
 }
 
 .wheel-pointer {
@@ -646,6 +739,32 @@ button:disabled {
     opacity: 1;
     filter: blur(0) saturate(1);
     transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes slotPulse {
+  from {
+    transform: translateY(-4px);
+    opacity: 0.75;
+  }
+
+  to {
+    transform: translateY(4px);
+    opacity: 1;
+  }
+}
+
+@keyframes slotHit {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(1);
   }
 }
 
