@@ -356,6 +356,24 @@ function initHomePage() {
 
   window.adjustPointsFromMenu = adjustPointsFromMenu;
 
+  async function adjustTickets(username, amount) {
+    clearMessage(message);
+
+    try {
+      const data = await api("/api/tickets", {
+        method: "POST",
+        body: JSON.stringify({ username, amount }),
+      });
+
+      setMessage(message, data.message);
+      await loadPage();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+    }
+  }
+
+  window.adjustTickets = adjustTickets;
+
   async function deleteUser(username) {
     clearMessage(message);
 
@@ -559,7 +577,14 @@ function initHomePage() {
                     <h3>${escapeHtml(entry.username)}</h3>
                     <div class="role">${escapeHtml(entry.role)}</div>
                   </div>
-                  <div class="points">${entry.points} pts</div>
+                  <div class="stack user-totals">
+                    <div class="points">${entry.points} pts</div>
+                    ${
+                      entry.role === "admin"
+                        ? ""
+                        : `<div class="muted">${entry.tickets} slot ticket${entry.tickets === 1 ? "" : "s"}</div>`
+                    }
+                  </div>
                 </div>
                 <div class="actions">
                   <div class="points-menu">
@@ -590,6 +615,11 @@ function initHomePage() {
                       Remove
                     </button>
                   </div>
+                  ${
+                    entry.role === "admin"
+                      ? ""
+                      : `<button class="secondary" onclick="adjustTickets(decodeURIComponent('${encodeURIComponent(entry.username)}'), 1)">+1 Ticket</button>`
+                  }
                   ${
                     entry.role === "admin"
                       ? ""
@@ -1375,3 +1405,4 @@ document.addEventListener("DOMContentLoaded", () => {
     initSettingsPage();
   }
 });
+
